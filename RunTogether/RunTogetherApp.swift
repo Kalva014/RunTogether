@@ -9,9 +9,12 @@ import SwiftUI
 
 @main
 struct RunTogetherApp: App {
+    @StateObject var appEnvironment = AppEnvironment()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(appEnvironment)
         }
     }
 }
