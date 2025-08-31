@@ -11,33 +11,44 @@ struct HomeView: View {
     }
 
     var body: some View {
-        VStack {
-            if let appUser = appEnvironment.appUser {
-                Text("Welcome, \(appUser.username)!")
-                    .font(.largeTitle)
-                    .padding()
-                Text("Email: \(appUser.email)")
-                    .font(.headline)
-                    .padding(.bottom)
-            } else {
-                Text("Welcome!")
-                    .font(.largeTitle)
-                    .padding()
-            }
-            
-            Button("Sign Out") {
-                Task {
-                    await viewModel.signOut()
-                    isSignedOut = true
-                    dismiss()
+        NavigationStack {
+            VStack {
+                if let appUser = appEnvironment.appUser {
+                    Text("Welcome, \(appUser.username)!")
+                        .font(.largeTitle)
+                        .padding()
+                    Text("Email: \(appUser.email)")
+                        .font(.headline)
+                        .padding(.bottom)
+                } else {
+                    Text("Welcome!")
+                        .font(.largeTitle)
+                        .padding()
                 }
+                
+                // Buttons to select what mode to run
+                NavigationLink(destination: RunningView(mode: "Race")) {
+                    Text("Race Mode")
+                }.buttonStyle(.borderedProminent)
+                
+                NavigationLink(destination: RunningView(mode: "Casual Group Run")) {
+                    Text("Casual Group Run")
+                }.buttonStyle(.borderedProminent)
+                
+                Button("Sign Out") {
+                    Task {
+                        await viewModel.signOut()
+                        isSignedOut = true
+                        dismiss()
+                    }
+                }
+                .padding()
+                .background(Color.red)
+                .foregroundColor(.white)
+                .cornerRadius(10)
             }
-            .padding()
-            .background(Color.red)
-            .foregroundColor(.white)
-            .cornerRadius(10)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

@@ -36,6 +36,7 @@ struct LogInView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 }
 

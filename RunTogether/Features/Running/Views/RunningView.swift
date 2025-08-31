@@ -7,35 +7,56 @@
 import SwiftUI
 import SpriteKit
 
-// Basically the user's person aka the sprite itself
-class CharacterScene: SKScene {
-    var viewModel: CharacterViewModel
-    var characterNode: SKSpriteNode
-    
-    init(size: CGSize, viewModel: CharacterViewModel) {
-        self.viewModel = viewModel
-        self.characterNode = SKSpriteNode(imageNamed: "MaleRunner") // Load the MaleRunner image
-        super.init(size: size)
-    }
-    
-    required init?(coder aDecoder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-    
-    // Basically you set up your sprite when the scene is presented on the view
+// Basically renders the runners and logic for racing
+class RaceScene: SKScene {
+    // This method is called when your game scene is ready to run
     override func didMove(to view: SKView) {
-        backgroundColor = .clear // Make the background transparent
-        characterNode.position = CGPoint(x: size.width / 2, y: size.height / 2)
-        characterNode.setScale(0.5) // Adjust scale as needed
-        addChild(characterNode)
+        // Create and position the runner on the screen
+        let runner = SKSpriteNode(imageNamed: "MaleRunner")
+        runner.position = CGPoint(x: frame.midX, y: frame.midY)
+        addChild(runner)
+        
+        // Flip the image to make it look like it is moving
+        let flipRight = SKAction.scaleX(to: 1, duration: 0)
+        let flipLeft = SKAction.scaleX(to: -1, duration: 0)
+        
+        // Define a pause between flips
+        let delay = SKAction.wait(forDuration: 0.2)
+        
+        let runSequence = SKAction.sequence([
+            flipLeft,
+            delay,
+            flipRight,
+            delay
+        ])
+        
+        // Make it run in a loop
+        let runAnimation: SKAction = .repeatForever(runSequence);
+        runner.run(runAnimation)
     }
 }
 
-// The actual view
+// Basically renders the runners and the logic for the casual run club
+class RunClubScene: SKScene {
+    
+}
+
 struct RunningView: View {
-    @StateObject var characterViewModel = CharacterViewModel()
+    let mode: String;
+    
+    // Initialize the scene
     var scene: SKScene {
-        let scene = CharacterScene(size: CGSize(width: 300, height: 300), viewModel: characterViewModel)
+        let scene: SKScene;
+        
+        // Choose what mode
+        if (mode == "Race") {
+            scene = RaceScene()
+        }
+        else {
+            scene = RunClubScene()
+        }
+        
+        scene.size = CGSize(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height)
         scene.scaleMode = .fill
         return scene
     }
@@ -46,6 +67,7 @@ struct RunningView: View {
             
             VStack {
                 Text("Runners Leaderboard").bold()
+                
                 HStack{
                     Text("Runner's Name")
                     Text("Distance")
@@ -57,10 +79,12 @@ struct RunningView: View {
                 Button("Settings") {}
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity) // Ensure ZStack fills space
+        .ignoresSafeArea() // Apply ignoresSafeArea to the entire ZStack
     }
 }
 
 #Preview {
-    RunningView()
+    RunningView(mode: "Race")
         .environmentObject(AppEnvironment())
 }
