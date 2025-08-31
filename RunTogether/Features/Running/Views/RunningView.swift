@@ -9,12 +9,45 @@ import SpriteKit
 
 // Basically renders the runners and logic for racing
 class RaceScene: SKScene {
-    // This method is called when your game scene is ready to run
-    override func didMove(to view: SKView) {
+    // Initialize runner
+    func createRunner(name: String, nationality: String) -> SKNode {
+        // Parent group container
+        let runnerGroup = SKNode()
+        
         // Create and position the runner on the screen
         let runner = SKSpriteNode(imageNamed: "MaleRunner")
         runner.position = CGPoint(x: frame.midX, y: frame.midY)
-        addChild(runner)
+        runner.name = "runnerSprite"
+        runnerGroup.addChild(runner)
+        
+        // Add the user's flag to the runner
+        let flagSprite = SKSpriteNode(imageNamed: nationality)
+        flagSprite.size = CGSize(width: 40, height: 25) // Customize flag size
+        flagSprite.position = CGPoint(x: 0, y: runner.size.height / 2 + 10) // Position above runner
+        flagSprite.zPosition = 1 // Ensure flag is drawn on top of the runner
+        runnerGroup.addChild(flagSprite)
+        
+        // Add the name label
+        let nameLabel = SKLabelNode(fontNamed: "Avenir-Medium")
+        nameLabel.text = name
+        nameLabel.fontColor = .white
+        nameLabel.position = CGPoint(x: 0, y: flagSprite.position.y + flagSprite.size.height / 2 + 5) // Position above flag
+        nameLabel.zPosition = 2 // Ensure label is drawn on top of everything
+        runnerGroup.addChild(nameLabel)
+        
+        return runnerGroup
+    }
+    
+    // This method is called when your game scene is ready to run
+    override func didMove(to view: SKView) {
+        // Set the scene origin to the center
+        self.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+        
+        // Create the user's runner
+        let runner1 = createRunner(name: "Ken", nationality: "UnitedStatesFlag")
+        runner1.position = .zero
+        addChild(runner1)
+        let runnerSprite = runner1.childNode(withName: "runnerSprite")
         
         // Flip the image to make it look like it is moving
         let flipRight = SKAction.scaleX(to: 1, duration: 0)
@@ -32,7 +65,7 @@ class RaceScene: SKScene {
         
         // Make it run in a loop
         let runAnimation: SKAction = .repeatForever(runSequence);
-        runner.run(runAnimation)
+        runnerSprite?.run(runAnimation)
     }
 }
 
