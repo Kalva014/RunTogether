@@ -6,14 +6,53 @@
 //
 import SwiftUI
 import SpriteKit
+import CoreLocation
+
+// For obtaining the live gps
+class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+    private let locationManager = CLLocationManager()
+    
+    @Published var currentSpeed: CLLocationSpeed = 0 // meters per second
+    
+    override init() {
+        super.init()
+        locationManager.delegate = self
+        locationManager.desiredAccuracy = kCLLocationAccuracyBest
+        locationManager.activityType = .fitness
+        locationManager.distanceFilter = 1 // update every meter
+        locationManager.requestWhenInUseAuthorization()
+        locationManager.startUpdatingLocation()
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.last else { return }
+        
+        // speed in m/s, fallback to 0 if invalid
+        currentSpeed = max(location.speed, 0)
+    }
+    
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        print("Location error: \(error.localizedDescription)")
+    }
+    
+    func paceString() -> String {
+        guard currentSpeed > 0 else { return "0:00" }
+        let paceSecondsPerKm = 1000 / currentSpeed
+        let minutes = Int(paceSecondsPerKm / 60)
+        let seconds = Int(paceSecondsPerKm) % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+}
+
 
 // Basically renders the runners and logic for racing
 class RaceScene: SKScene, ObservableObject {
     @Published var leaderboard: [RunnerData] = []
+    var locationManager: LocationManager?
     
     var playerRunner: SKNode!
     var otherRunners: [SKNode] = []
-    var raceDistance: CGFloat = 2000 // e.g., 5K in meters
+    var raceDistance: CGFloat = 5000 // e.g., 5K in meters
     var playerDistance: CGFloat = 0
     var scrollSpeed: CGFloat = 5.0
     var finishLine: SKSpriteNode!
@@ -29,6 +68,8 @@ class RaceScene: SKScene, ObservableObject {
     // Initialize runners with starting distances
     var otherRunnersCurrentDistances: [CGFloat] = [50, 120] // starting distances
     var otherRunnersSpeeds: [CGFloat] = [4.5, 5.2]          // meters per frame
+    
+    var previousOpponentSpeeds: [CGFloat] = []
 
     // Use a boolean to track if the race is over to stop scrolling
     var isRaceOver = false
@@ -63,13 +104,12 @@ class RaceScene: SKScene, ObservableObject {
     }
     
     // Character run animation
-    func runAnimation() -> SKAction {
-        // Flip the image to make it look like it is moving
+    func runAnimation(speedMultiplier: CGFloat = 1.0) -> SKAction {
         let flipRight = SKAction.scaleX(to: 1, duration: 0)
         let flipLeft = SKAction.scaleX(to: -1, duration: 0)
         
-        // Define a pause between flips
-        let delay = SKAction.wait(forDuration: 0.2)
+        // Adjust delay based on speedMultiplier
+        let delay = SKAction.wait(forDuration: 0.2 / speedMultiplier)
         
         let runSequence = SKAction.sequence([
             flipLeft,
@@ -78,10 +118,9 @@ class RaceScene: SKScene, ObservableObject {
             delay
         ])
         
-        // Make it run in a loop
-        let runAnimation: SKAction = .repeatForever(runSequence);
-        return runAnimation
+        return .repeatForever(runSequence)
     }
+
     
     // Calculate the runner's pace
     func calculatePace(for distance: CGFloat) -> String {
@@ -104,7 +143,7 @@ class RaceScene: SKScene, ObservableObject {
         // Create the finish line
         let newFinishLine = SKSpriteNode(imageNamed: "FinishLineBanner")
         newFinishLine.position = CGPoint(x: frame.midX, y: playerRunner.position.y - 75)
-        newFinishLine.zPosition = 5
+        newFinishLine.zPosition = 10
         newFinishLine.setScale(0.01)
         addChild(newFinishLine)
         finishLine = newFinishLine
@@ -131,6 +170,23 @@ class RaceScene: SKScene, ObservableObject {
         return String(format: "%d:%02d", minutes, seconds)
     }
     
+    // Updating player stats each frame, save them to the widget
+    func updateWidgetData() {
+        let defaults = UserDefaults(suiteName: "group.com.kenneth.RunTogether")
+        let playerPosition = leaderboard.firstIndex(where: { $0.name == "Ken" }) ?? 0
+        let playerDistanceInt = Int(playerDistance)
+        let playerPace = formatTime(finishTimes[-1] ?? CACurrentMediaTime() - (startTime ?? CACurrentMediaTime()))
+        
+        let widgetData: [String: Any] = [
+            "distance": playerDistanceInt,
+            "position": playerPosition + 1, // 1-indexed
+            "pace": playerPace
+        ]
+        
+        defaults?.set(widgetData, forKey: "CurrentRunnerData")
+        defaults?.synchronize()
+    }
+
     // This method is used to initialize the sprites and called when your game scene is ready to run
     override func didMove(to view: SKView) {
         self.anchorPoint = CGPoint(x: 0.5, y: 0.5)
@@ -160,7 +216,7 @@ class RaceScene: SKScene, ObservableObject {
         let topCover = SKSpriteNode(color: .black, size: CGSize(width: frame.width, height: frame.height))
         topCover.anchorPoint = CGPoint(x: 0.5, y: 0) // anchor bottom
         // Place it at the very top of the screen
-        topCover.position = CGPoint(x: 0, y: -frame.height / 3)
+        topCover.position = CGPoint(x: 0, y: -frame.height / 4)
         topCover.zPosition = 0 // on top of everything
         addChild(topCover)
         
@@ -199,36 +255,27 @@ class RaceScene: SKScene, ObservableObject {
             opponent2Sprite.run(animation)
         }
         
+        // Initialize previous speeds to match initial speeds
+        previousOpponentSpeeds = otherRunnersSpeeds
+        
         startTime = CACurrentMediaTime()
     }
     
     // Updates every frame
     override func update(_ currentTime: TimeInterval) {
-        let currentTime = CACurrentMediaTime()
-        
-        // Player
-        if playerDistance >= raceDistance && finishTimes[-1] == nil {
-            finishTimes[-1] = currentTime - (startTime ?? currentTime)
-            raceFinished()
+        guard let speedMps = locationManager?.currentSpeed else { return }
+
+        // 1. Update player distance only if moving
+        if speedMps > 0 {
+            let deltaDistance = CGFloat(speedMps / 60.0)
+            playerDistance = min(playerDistance + deltaDistance, raceDistance)
         }
 
-        // Opponents
-        for i in 0..<otherRunners.count {
-            if otherRunnersCurrentDistances[i] >= raceDistance && finishTimes[i] == nil {
-                finishTimes[i] = currentTime - (startTime ?? currentTime)
-            }
-        }
-
-        // Move the player only if race is not finished
-        if !isRaceOver {
-            playerDistance = min(playerDistance + scrollSpeed, raceDistance)
-        }
-
-        // Move ground only while the player is moving
-        if !isRaceOver {
+        // 2. Move ground only if player is moving
+        if !isRaceOver && speedMps > 0 {
             guard let groundHeight = scrollingGroundNodes.first?.size.height else { return }
             for ground in scrollingGroundNodes {
-                ground.position.y -= scrollSpeed
+                ground.position.y -= CGFloat(speedMps / 60.0)
                 if ground.position.y <= -frame.height/2 - groundHeight {
                     if let topMost = scrollingGroundNodes.max(by: { $0.position.y < $1.position.y }) {
                         ground.position.y = topMost.position.y + groundHeight - 10
@@ -237,18 +284,30 @@ class RaceScene: SKScene, ObservableObject {
             }
         }
 
-        var currRunners: [RunnerData] = []
-        currRunners.append(RunnerData(name: "Ken", distance: playerDistance, pace: calculatePace(for: playerDistance)))
+        // 3. Update player sprite animation speed every frame
+        if let playerSprite = playerRunner.childNode(withName: "runnerSprite") {
+            let speedMultiplier = max(CGFloat(speedMps), 0.1)
+            playerSprite.removeAllActions()
+            playerSprite.run(runAnimation(speedMultiplier: speedMultiplier))
+            playerSprite.position = CGPoint(x: 0, y: 0) // Keep in place
+        }
 
+        // 4. Check for race finish
+        if playerDistance >= raceDistance && finishTimes[-1] == nil {
+            finishTimes[-1] = currentTime - (startTime ?? currentTime)
+            raceFinished()
+        }
+
+        // 5. Update opponents
         for i in 0..<otherRunners.count {
-            // Move runner forward, capped at raceDistance
-            otherRunnersCurrentDistances[i] = min(otherRunnersCurrentDistances[i] + otherRunnersSpeeds[i], raceDistance)
-
             let runnerNode = otherRunners[i]
+            let runnerSprite = runnerNode.childNode(withName: "runnerSprite")!
+
+            // Update distance
+            otherRunnersCurrentDistances[i] = min(otherRunnersCurrentDistances[i] + otherRunnersSpeeds[i], raceDistance)
             let runnerDistance = otherRunnersCurrentDistances[i]
             let delta = runnerDistance - playerDistance
 
-            // Hide runner if finished or too far behind/ahead
             if runnerDistance >= raceDistance || delta <= 0 || delta > 1000 {
                 runnerNode.isHidden = true
             } else {
@@ -258,23 +317,41 @@ class RaceScene: SKScene, ObservableObject {
                 runnerNode.position = CGPoint(x: offsetX, y: baseY)
                 let scaleFactor = max(0.3, 1.0 - (delta / 1000.0) * 0.7)
                 runnerNode.setScale(scaleFactor)
-            }
 
-            let displayDistance = min(runnerDistance, raceDistance)
+                // Animate opponent only if speed changed
+                let newSpeed = otherRunnersSpeeds[i]
+                if previousOpponentSpeeds[i] != newSpeed {
+                    runnerSprite.removeAllActions()
+                    let speedMultiplier = newSpeed / 4.5
+                    runnerSprite.run(runAnimation(speedMultiplier: speedMultiplier))
+                    previousOpponentSpeeds[i] = newSpeed
+                }
+            }
+        }
+        
+        // Ensure player stays on top visually
+        playerRunner.zPosition = 10
+        for runnerNode in otherRunners {
+            runnerNode.zPosition = 5
+        }
+
+        // 6. Update leaderboard
+        let pace = locationManager?.paceString() ?? "0:00"
+        var currRunners: [RunnerData] = []
+        currRunners.append(RunnerData(name: "Ken", distance: playerDistance, pace: pace))
+        for i in 0..<otherRunners.count {
             currRunners.append(RunnerData(
                 name: "Opponent \(i+1)",
-                distance: displayDistance,
-                pace: calculatePace(for: displayDistance)
+                distance: otherRunnersCurrentDistances[i],
+                pace: calculatePace(for: otherRunnersCurrentDistances[i])
             ))
         }
-
         leaderboard = currRunners.sorted(by: { $0.distance > $1.distance })
 
-        // Call finish only once when player reaches distance
-        if playerDistance >= raceDistance && !isRaceOver {
-            raceFinished()
-        }
+        // 7. Update widget
+        updateWidgetData()
     }
+
 }
 
 // Basically renders the runners and the logic for the casual run club
@@ -284,7 +361,8 @@ class RunClubScene: SKScene {
 
 struct RunningView: View {
     let mode: String
-
+    
+    @StateObject private var locationManager = LocationManager()
     @StateObject private var raceScene = RaceScene()
     
     var body: some View {
@@ -355,12 +433,13 @@ struct RunningView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()
         .onAppear {
-            // Set the scene size and scale only once
             raceScene.size = CGSize(
                 width: UIScreen.main.bounds.width,
                 height: UIScreen.main.bounds.height
             )
             raceScene.scaleMode = .fill
+            
+            raceScene.locationManager = locationManager  // <-- important
         }
     }
 }
