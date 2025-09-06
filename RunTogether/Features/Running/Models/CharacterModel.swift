@@ -16,3 +16,10 @@ struct CharacterModel {
     var position: CGPoint
     var animation: CharacterAnimations
 }
+
+struct RunnerData: Identifiable {
+    let id = UUID()
+    let name: String
+    let distance: Double
+    let pace: String
+}

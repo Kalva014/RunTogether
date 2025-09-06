@@ -8,18 +8,30 @@ import SwiftUI
 import SpriteKit
 
 // Basically renders the runners and logic for racing
-class RaceScene: SKScene {
+class RaceScene: SKScene, ObservableObject {
+    @Published var leaderboard: [RunnerData] = []
+    
     var playerRunner: SKNode!
     var otherRunners: [SKNode] = []
-    var raceDistance: CGFloat = 5000 // e.g., 5K in meters
+    var raceDistance: CGFloat = 2000 // e.g., 5K in meters
     var playerDistance: CGFloat = 0
     var scrollSpeed: CGFloat = 5.0
     var finishLine: SKSpriteNode!
+    
+    var startTime: TimeInterval?         // The time the race started
+    var finishTimes: [Int: TimeInterval] = [:] // Track finish time per runner: -1 = player, 0..N-1 = opponents
     
     // Background track nodes for looping
     var track1: SKSpriteNode!
     var track2: SKSpriteNode!
     var scrollingGroundNodes: [SKSpriteNode] = []
+    
+    // Initialize runners with starting distances
+    var otherRunnersCurrentDistances: [CGFloat] = [50, 120] // starting distances
+    var otherRunnersSpeeds: [CGFloat] = [4.5, 5.2]          // meters per frame
+
+    // Use a boolean to track if the race is over to stop scrolling
+    var isRaceOver = false
     
     // Initialize runner
     func createRunner(name: String, nationality: String) -> SKNode {
@@ -71,10 +83,39 @@ class RaceScene: SKScene {
         return runAnimation
     }
     
+    // Calculate the runner's pace
+    func calculatePace(for distance: CGFloat) -> String {
+        // Replace with real pace logic
+        let minutes = Int(distance / 200) % 10
+        let seconds = Int(distance) % 60
+        return "\(minutes):\(String(format: "%02d", seconds))"
+    }
+    
     // Handle race completion
     func raceFinished() {
-        isPaused = true
-        
+        guard !isRaceOver else { return }
+        isRaceOver = true
+
+        // Stop the player's motion immediately
+        playerDistance = raceDistance
+        scrollSpeed = 0
+        playerRunner.childNode(withName: "runnerSprite")?.removeAllActions()
+
+        // Create the finish line
+        let newFinishLine = SKSpriteNode(imageNamed: "FinishLineBanner")
+        newFinishLine.position = CGPoint(x: frame.midX, y: playerRunner.position.y - 75)
+        newFinishLine.zPosition = 5
+        newFinishLine.setScale(0.01)
+        addChild(newFinishLine)
+        finishLine = newFinishLine
+
+        // Stop any ongoing actions
+        finishLine?.removeAllActions()
+
+        // Immediately set the target scale without interpolation
+        finishLine?.setScale(1.5)
+
+        // Show "Race Complete" label
         let label = SKLabelNode(text: "Race Complete!")
         label.fontName = "Avenir-Heavy"
         label.fontSize = 40
@@ -82,6 +123,12 @@ class RaceScene: SKScene {
         label.position = CGPoint(x: 0, y: 0)
         label.zPosition = 100
         addChild(label)
+    }
+    
+    func formatTime(_ time: TimeInterval) -> String {
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return String(format: "%d:%02d", minutes, seconds)
     }
     
     // This method is used to initialize the sprites and called when your game scene is ready to run
@@ -117,13 +164,6 @@ class RaceScene: SKScene {
         topCover.zPosition = 0 // on top of everything
         addChild(topCover)
         
-        // Add finish line banner
-        finishLine = SKSpriteNode(imageNamed: "FinishLineBanner")
-        finishLine.size = CGSize(width: frame.width * 0.8, height: 60)
-        finishLine.position = CGPoint(x: 0, y: raceDistance / 10) // scale meters→pixels
-        finishLine.zPosition = 5
-        addChild(finishLine)
-        
         // Create the user's runner
         playerRunner = createRunner(name: "Ken", nationality: "UnitedStatesFlag")
         let runnerY = -frame.height / 2.5 + (frame.height * 0.2)
@@ -158,28 +198,80 @@ class RaceScene: SKScene {
             let animation = runAnimation()
             opponent2Sprite.run(animation)
         }
+        
+        startTime = CACurrentMediaTime()
     }
     
-    // Calls this func every frame
+    // Updates every frame
     override func update(_ currentTime: TimeInterval) {
-        playerDistance += scrollSpeed
+        let currentTime = CACurrentMediaTime()
         
-        // Initialize infinite looping ground
-        guard let groundHeight = scrollingGroundNodes.first?.size.height else { return }
-                    
-        for ground in scrollingGroundNodes {
-            ground.position.y -= scrollSpeed
-            
-            // When the tile moves completely off-screen (bottom), snap it directly above the current highest tile
-            if ground.position.y <= -frame.height/2 - groundHeight {
-                if let topMost = scrollingGroundNodes.max(by: { $0.position.y < $1.position.y }) {
-                    ground.position.y = topMost.position.y + groundHeight - 10 // Added 10 overlap
+        // Player
+        if playerDistance >= raceDistance && finishTimes[-1] == nil {
+            finishTimes[-1] = currentTime - (startTime ?? currentTime)
+            raceFinished()
+        }
+
+        // Opponents
+        for i in 0..<otherRunners.count {
+            if otherRunnersCurrentDistances[i] >= raceDistance && finishTimes[i] == nil {
+                finishTimes[i] = currentTime - (startTime ?? currentTime)
+            }
+        }
+
+        // Move the player only if race is not finished
+        if !isRaceOver {
+            playerDistance = min(playerDistance + scrollSpeed, raceDistance)
+        }
+
+        // Move ground only while the player is moving
+        if !isRaceOver {
+            guard let groundHeight = scrollingGroundNodes.first?.size.height else { return }
+            for ground in scrollingGroundNodes {
+                ground.position.y -= scrollSpeed
+                if ground.position.y <= -frame.height/2 - groundHeight {
+                    if let topMost = scrollingGroundNodes.max(by: { $0.position.y < $1.position.y }) {
+                        ground.position.y = topMost.position.y + groundHeight - 10
+                    }
                 }
             }
         }
-        
-        // Finish line could also "zoom" like a track sprite
-        if playerDistance >= raceDistance {
+
+        var currRunners: [RunnerData] = []
+        currRunners.append(RunnerData(name: "Ken", distance: playerDistance, pace: calculatePace(for: playerDistance)))
+
+        for i in 0..<otherRunners.count {
+            // Move runner forward, capped at raceDistance
+            otherRunnersCurrentDistances[i] = min(otherRunnersCurrentDistances[i] + otherRunnersSpeeds[i], raceDistance)
+
+            let runnerNode = otherRunners[i]
+            let runnerDistance = otherRunnersCurrentDistances[i]
+            let delta = runnerDistance - playerDistance
+
+            // Hide runner if finished or too far behind/ahead
+            if runnerDistance >= raceDistance || delta <= 0 || delta > 1000 {
+                runnerNode.isHidden = true
+            } else {
+                runnerNode.isHidden = false
+                let baseY = -frame.height / 2.5 + (frame.height * 0.2)
+                let offsetX = CGFloat(i - otherRunners.count / 2) * 50
+                runnerNode.position = CGPoint(x: offsetX, y: baseY)
+                let scaleFactor = max(0.3, 1.0 - (delta / 1000.0) * 0.7)
+                runnerNode.setScale(scaleFactor)
+            }
+
+            let displayDistance = min(runnerDistance, raceDistance)
+            currRunners.append(RunnerData(
+                name: "Opponent \(i+1)",
+                distance: displayDistance,
+                pace: calculatePace(for: displayDistance)
+            ))
+        }
+
+        leaderboard = currRunners.sorted(by: { $0.distance > $1.distance })
+
+        // Call finish only once when player reaches distance
+        if playerDistance >= raceDistance && !isRaceOver {
             raceFinished()
         }
     }
@@ -191,45 +283,85 @@ class RunClubScene: SKScene {
 }
 
 struct RunningView: View {
-    let mode: String;
-    
-    // Initialize the scene
-    var scene: SKScene {
-        let scene: SKScene;
-        
-        // Choose what mode
-        if (mode == "Race") {
-            scene = RaceScene()
-        }
-        else {
-            scene = RunClubScene()
-        }
-        
-        scene.size = CGSize(width: UIScreen.main.bounds.width, height: UIScreen.main.bounds.height)
-        scene.scaleMode = .fill
-        return scene
-    }
+    let mode: String
+
+    @StateObject private var raceScene = RaceScene()
     
     var body: some View {
         ZStack {
-            SpriteView(scene: scene)
-            
+            SpriteView(scene: raceScene)
+
+            // Settings button
             VStack {
-                Text("Runners Leaderboard").bold()
-                
-                HStack{
-                    Text("Runner's Name")
-                    Text("Distance")
-                    Text("Pace")
+                HStack {
+                    Button(action: {}) {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 36))
+                            .foregroundColor(.white)
+                            .padding(.leading, 16)
+                            .padding(.top, 40)
+                    }
+                    Spacer()
                 }
+                Spacer()
             }
-            
-            HStack {
-                Button("Settings") {}
+
+            // Leaderboard
+            VStack(alignment: .trailing, spacing: 8) {
+                Text("Leaderboard")
+                    .font(.headline)
+                    .foregroundColor(.yellow)
+                
+                ScrollView(.vertical) {
+                    VStack(spacing: 6) {
+                        ForEach(Array(raceScene.leaderboard.enumerated()), id: \.element.id) { index, runner in
+                            HStack {
+                                // Position number
+                                Text("\(index + 1)")
+                                    .frame(width: 24, alignment: .leading)
+                                    .foregroundColor(.yellow)
+
+                                // Runner name
+                                Text(runner.name)
+                                    .frame(maxWidth: 80, alignment: .leading)
+
+                                // Distance
+                                Text("\(Int(runner.distance))m")
+                                    .frame(width: 60, alignment: .trailing)
+
+                                // Pace
+                                Text(runner.pace)
+                                    .frame(width: 50, alignment: .trailing)
+                            }
+                            .padding(6)
+                            .background(Color.black.opacity(0.4))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                            )
+                            .font(.caption)
+                            .foregroundColor(.white)
+                        }
+                    }
+                }
+                .frame(maxHeight: 300) // Limit height so it scrolls if content exceeds this
             }
+            .padding(.top, 50)
+            .padding(.trailing, 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity) // Ensure ZStack fills space
-        .ignoresSafeArea() // Apply ignoresSafeArea to the entire ZStack
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea()
+        .onAppear {
+            // Set the scene size and scale only once
+            raceScene.size = CGSize(
+                width: UIScreen.main.bounds.width,
+                height: UIScreen.main.bounds.height
+            )
+            raceScene.scaleMode = .fill
+        }
     }
 }
 

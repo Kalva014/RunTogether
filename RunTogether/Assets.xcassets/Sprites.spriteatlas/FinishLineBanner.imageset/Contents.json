@@ -1,17 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "FinishLineBanner.png",
+      "filename" : "finishLine.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
-      "filename" : "FinishLineBanner 1.png",
+      "filename" : "finishLine 1.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
-      "filename" : "FinishLineBanner 2.png",
+      "filename" : "finishLine 2.png",
       "idiom" : "universal",
       "scale" : "3x"
     }
