@@ -36,7 +36,7 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
     
     func paceString() -> String {
-        guard currentSpeed > 0 else { return "0:00" }
+        guard currentSpeed > 0 else { return "--:--" }
         let paceSecondsPerKm = 1000 / currentSpeed
         let minutes = Int(paceSecondsPerKm / 60)
         let seconds = Int(paceSecondsPerKm) % 60
@@ -70,6 +70,9 @@ class RaceScene: SKScene, ObservableObject {
     var otherRunnersSpeeds: [CGFloat] = [4.5, 5.2]          // meters per frame
     
     var previousOpponentSpeeds: [CGFloat] = []
+    var previousPlayerSpeedMultiplier: CGFloat = 0.0
+    
+    var lastUpdateTime: TimeInterval = 0
 
     // Use a boolean to track if the race is over to stop scrolling
     var isRaceOver = false
@@ -107,29 +110,34 @@ class RaceScene: SKScene, ObservableObject {
     func runAnimation(speedMultiplier: CGFloat = 1.0) -> SKAction {
         let flipRight = SKAction.scaleX(to: 1, duration: 0)
         let flipLeft = SKAction.scaleX(to: -1, duration: 0)
-        
-        // Adjust delay based on speedMultiplier
-        let delay = SKAction.wait(forDuration: 0.2 / speedMultiplier)
-        
+
+        let frameDuration = max(0.05, 0.25 / speedMultiplier) // cap speed
+        let delay = SKAction.wait(forDuration: frameDuration)
+
         let runSequence = SKAction.sequence([
             flipLeft,
             delay,
             flipRight,
             delay
         ])
-        
         return .repeatForever(runSequence)
     }
 
     
-    // Calculate the runner's pace
-    func calculatePace(for distance: CGFloat) -> String {
-        // Replace with real pace logic
-        let minutes = Int(distance / 200) % 10
-        let seconds = Int(distance) % 60
-        return "\(minutes):\(String(format: "%02d", seconds))"
+    // Idle: no actions, just the base sprite
+    func idleAnimation(sprite: SKNode) {
+        sprite.removeAllActions()
     }
     
+    // Calculate the runner's pace
+    func calculatePace(from speedMps: CGFloat) -> String {
+        guard speedMps > 0 else { return "--:--" }
+        let paceSecondsPerKm = 1000.0 / Double(speedMps)
+        let minutes = Int(paceSecondsPerKm / 60)
+        let seconds = Int(paceSecondsPerKm) % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+
     // Handle race completion
     func raceFinished() {
         guard !isRaceOver else { return }
@@ -225,12 +233,6 @@ class RaceScene: SKScene, ObservableObject {
         let runnerY = -frame.height / 2.5 + (frame.height * 0.2)
         playerRunner.position = CGPoint(x: 0, y: runnerY)
         addChild(playerRunner)
-        
-        // Run the animation on the player's runner
-        if let playerSprite = playerRunner.childNode(withName: "runnerSprite") {
-            let animation = runAnimation()
-            playerSprite.run(animation)
-        }
 
         // Create some dummy runners
         let opponent1 = createRunner(name: "Bre", nationality: "CanadaFlag")
@@ -261,21 +263,26 @@ class RaceScene: SKScene, ObservableObject {
         startTime = CACurrentMediaTime()
     }
     
-    // Updates every frame
     override func update(_ currentTime: TimeInterval) {
         guard let speedMps = locationManager?.currentSpeed else { return }
+        guard !isRaceOver else { return }
 
-        // 1. Update player distance only if moving
+        // Calculate deltaTime
+        var deltaTime = currentTime - lastUpdateTime
+        if lastUpdateTime == 0 { deltaTime = 0 }
+        lastUpdateTime = currentTime
+
+        // 1. Update player distance (speed is in meters/sec)
         if speedMps > 0 {
-            let deltaDistance = CGFloat(speedMps / 60.0)
+            let deltaDistance = CGFloat(speedMps) * CGFloat(deltaTime)
             playerDistance = min(playerDistance + deltaDistance, raceDistance)
         }
 
-        // 2. Move ground only if player is moving
-        if !isRaceOver && speedMps > 0 {
+        // 2. Move ground relative to player speed
+        if speedMps > 0 {
             guard let groundHeight = scrollingGroundNodes.first?.size.height else { return }
             for ground in scrollingGroundNodes {
-                ground.position.y -= CGFloat(speedMps / 60.0)
+                ground.position.y -= CGFloat(speedMps) * CGFloat(deltaTime) * 20  // scale factor for realism
                 if ground.position.y <= -frame.height/2 - groundHeight {
                     if let topMost = scrollingGroundNodes.max(by: { $0.position.y < $1.position.y }) {
                         ground.position.y = topMost.position.y + groundHeight - 10
@@ -284,12 +291,20 @@ class RaceScene: SKScene, ObservableObject {
             }
         }
 
-        // 3. Update player sprite animation speed every frame
+        // 3. Update player sprite animation speed
         if let playerSprite = playerRunner.childNode(withName: "runnerSprite") {
-            let speedMultiplier = max(CGFloat(speedMps), 0.1)
-            playerSprite.removeAllActions()
-            playerSprite.run(runAnimation(speedMultiplier: speedMultiplier))
-            playerSprite.position = CGPoint(x: 0, y: 0) // Keep in place
+            if speedMps <= 0.1 {
+                // Always stop actions if not moving
+                playerSprite.removeAllActions()
+                previousPlayerSpeedMultiplier = 0
+            } else {
+                let speedMultiplier = max(CGFloat(speedMps) / 3.0, 0.1)
+                if abs(speedMultiplier - previousPlayerSpeedMultiplier) > 0.1 {
+                    playerSprite.removeAllActions()
+                    playerSprite.run(runAnimation(speedMultiplier: speedMultiplier))
+                    previousPlayerSpeedMultiplier = speedMultiplier
+                }
+            }
         }
 
         // 4. Check for race finish
@@ -327,6 +342,11 @@ class RaceScene: SKScene, ObservableObject {
                     previousOpponentSpeeds[i] = newSpeed
                 }
             }
+            
+            
+            if runnerDistance >= raceDistance && finishTimes[i] == nil {
+                finishTimes[i] = currentTime - (startTime ?? currentTime)
+            }
         }
         
         // Ensure player stays on top visually
@@ -338,15 +358,37 @@ class RaceScene: SKScene, ObservableObject {
         // 6. Update leaderboard
         let pace = locationManager?.paceString() ?? "0:00"
         var currRunners: [RunnerData] = []
-        currRunners.append(RunnerData(name: "Ken", distance: playerDistance, pace: pace))
+
+        // Player entry
+        currRunners.append(RunnerData(
+            name: "Ken",
+            distance: playerDistance,
+            pace: pace,
+            finishTime: finishTimes[-1]
+        ))
+
+        // Opponents
         for i in 0..<otherRunners.count {
             currRunners.append(RunnerData(
                 name: "Opponent \(i+1)",
                 distance: otherRunnersCurrentDistances[i],
-                pace: calculatePace(for: otherRunnersCurrentDistances[i])
+                pace: calculatePace(from: otherRunnersSpeeds[i]),
+                finishTime: finishTimes[i]
             ))
         }
-        leaderboard = currRunners.sorted(by: { $0.distance > $1.distance })
+
+        // Sort leaderboard by distance (still running) or finish time (if finished)
+        leaderboard = currRunners.sorted {
+            if let t1 = $0.finishTime, let t2 = $1.finishTime {
+                return t1 < t2 // both finished → sort by time
+            } else if $0.finishTime != nil {
+                return true // finished beats not finished
+            } else if $1.finishTime != nil {
+                return false
+            } else {
+                return $0.distance > $1.distance // neither finished → sort by distance
+            }
+        }
 
         // 7. Update widget
         updateWidgetData()
@@ -372,47 +414,85 @@ struct RunningView: View {
             // Settings button
             VStack {
                 HStack {
-                    Button(action: {}) {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 36))
+                    Spacer() // push everything to the right
+                    VStack(alignment: .trailing, spacing: 8) {
+                        // Settings button
+                        Button(action: {}) {
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 36))
+                                .foregroundColor(.white)
+                        }
+                        
+                        // Player stats
+                        if let speed = raceScene.locationManager?.currentSpeed {
+                            Text(String(format: "Speed: %.1f m/s", speed))
+                                .font(.caption)
+                                .foregroundColor(.white)
+                        }
+                        
+                        Text("Distance: \(Int(raceScene.playerDistance)) m")
+                            .font(.caption)
                             .foregroundColor(.white)
-                            .padding(.leading, 16)
-                            .padding(.top, 40)
+                        
+                        let progress = raceScene.playerDistance / raceScene.raceDistance * 100
+                        Text(String(format: "Progress: %.0f%%", progress))
+                            .font(.caption)
+                            .foregroundColor(.white)
                     }
-                    Spacer()
+                    .padding(.top, 40)
+                    .padding(.trailing, 16)
                 }
                 Spacer()
             }
 
+            
             // Leaderboard
-            VStack(alignment: .trailing, spacing: 8) {
+            VStack(alignment: .leading, spacing: 8) { // change alignment to .leading
                 Text("Leaderboard")
                     .font(.headline)
                     .foregroundColor(.yellow)
-                
+                    .padding(.leading, 16) // optional, adds left padding
+
                 ScrollView(.vertical) {
                     VStack(spacing: 6) {
                         ForEach(Array(raceScene.leaderboard.enumerated()), id: \.element.id) { index, runner in
                             HStack {
-                                // Position number
                                 Text("\(index + 1)")
                                     .frame(width: 24, alignment: .leading)
                                     .foregroundColor(.yellow)
 
-                                // Runner name
                                 Text(runner.name)
                                     .frame(maxWidth: 80, alignment: .leading)
 
-                                // Distance
                                 Text("\(Int(runner.distance))m")
                                     .frame(width: 60, alignment: .trailing)
 
-                                // Pace
-                                Text("\(runner.pace) min/km")
-                                    .frame(width: 50, alignment: .trailing)
+                                if index == 0 {
+                                    if let time = runner.finishTime {
+                                        Text(raceScene.formatTime(time))
+                                            .frame(width: 60, alignment: .trailing)
+                                    } else {
+                                        Text("\(runner.pace) min/km")
+                                            .frame(width: 60, alignment: .trailing)
+                                    }
+                                } else {
+                                    if let leaderTime = raceScene.leaderboard.first?.finishTime,
+                                       let time = runner.finishTime {
+                                        let gap = time - leaderTime
+                                        Text("+\(raceScene.formatTime(gap))")
+                                            .frame(width: 60, alignment: .trailing)
+                                    } else {
+                                        Text("\(runner.pace) min/km")
+                                            .frame(width: 60, alignment: .trailing)
+                                    }
+                                }
                             }
                             .padding(6)
-                            .background(Color.black.opacity(0.4))
+                            .background(
+                                runner.finishTime != nil
+                                    ? Color.green.opacity(0.5)
+                                    : Color.black.opacity(0.4)
+                            )
                             .cornerRadius(8)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 8)
@@ -423,11 +503,11 @@ struct RunningView: View {
                         }
                     }
                 }
-                .frame(maxHeight: 300) // Limit height so it scrolls if content exceeds this
+                .frame(maxHeight: 300)
             }
             .padding(.top, 50)
-            .padding(.trailing, 16)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            .padding(.leading, 16) // move the whole leaderboard slightly from the left
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading) // align to top left
 
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

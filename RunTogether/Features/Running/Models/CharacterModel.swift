@@ -20,6 +20,7 @@ struct CharacterModel {
 struct RunnerData: Identifiable {
     let id = UUID()
     let name: String
-    let distance: Double
+    let distance: CGFloat
     let pace: String
+    let finishTime: TimeInterval?
 }
