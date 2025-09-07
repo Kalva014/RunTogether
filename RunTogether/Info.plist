@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Require user&apos;s location for tracking user&apos;s running pace and distance.</string>
 	<key>Supabase Key</key>
 	<string>$(SUPABASE_KEY)</string>
 	<key>Supabase URL</key>

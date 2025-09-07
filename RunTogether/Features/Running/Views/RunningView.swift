@@ -408,7 +408,7 @@ struct RunningView: View {
                                     .frame(width: 60, alignment: .trailing)
 
                                 // Pace
-                                Text(runner.pace)
+                                Text("\(runner.pace) min/km")
                                     .frame(width: 50, alignment: .trailing)
                             }
                             .padding(6)
