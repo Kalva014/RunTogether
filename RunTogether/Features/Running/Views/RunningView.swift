@@ -52,7 +52,7 @@ class RaceScene: SKScene, ObservableObject {
     
     var playerRunner: SKNode!
     var otherRunners: [SKNode] = []
-    var raceDistance: CGFloat = 5000 // e.g., 5K in meters
+    var raceDistance: CGFloat = 100 // e.g., 5K in meters
     var playerDistance: CGFloat = 0
     var scrollSpeed: CGFloat = 5.0
     var finishLine: SKSpriteNode!
@@ -78,33 +78,38 @@ class RaceScene: SKScene, ObservableObject {
     var isRaceOver = false
     
     // Initialize runner
-    func createRunner(name: String, nationality: String) -> SKNode {
-        // Parent group container
+    func createRunner(name: String, nationality: String, isPlayer: Bool = false) -> SKNode {
         let runnerGroup = SKNode()
-        
-        // Create and position the runner on the screen
+
+        // Runner sprite
         let runner = SKSpriteNode(imageNamed: "MaleRunner")
-        runner.position = CGPoint(x: frame.midX, y: frame.midY)
         runner.name = "runnerSprite"
         runnerGroup.addChild(runner)
-        
-        // Add the user's flag to the runner
-        let flagSprite = SKSpriteNode(imageNamed: nationality)
-        flagSprite.size = CGSize(width: 40, height: 25) // Customize flag size
-        flagSprite.position = CGPoint(x: 0, y: runner.size.height / 2 + 10) // Position above runner
-        flagSprite.zPosition = 1 // Ensure flag is drawn on top of the runner
-        runnerGroup.addChild(flagSprite)
-        
-        // Add the name label
-        let nameLabel = SKLabelNode(fontNamed: "Avenir-Medium")
-        nameLabel.text = name
-        nameLabel.fontColor = .white
-        nameLabel.position = CGPoint(x: 0, y: flagSprite.position.y + flagSprite.size.height / 2 + 5) // Position above flag
-        nameLabel.zPosition = 2 // Ensure label is drawn on top of everything
-        runnerGroup.addChild(nameLabel)
-        
+
+        // Only add flag + name for non-player runners
+        if !isPlayer {
+            let labelContainer = SKNode()
+            labelContainer.position = CGPoint(x: 0, y: runner.size.height / 2 + 10)
+
+            let flagSprite = SKSpriteNode(imageNamed: nationality)
+            flagSprite.size = CGSize(width: 40, height: 25)
+            flagSprite.position = CGPoint(x: -30, y: 0)
+
+            let nameLabel = SKLabelNode(fontNamed: "Avenir-Medium")
+            nameLabel.text = name
+            nameLabel.fontColor = .white
+            nameLabel.fontSize = 14
+            nameLabel.position = CGPoint(x: 20, y: -nameLabel.frame.height / 2)
+
+            labelContainer.addChild(flagSprite)
+            labelContainer.addChild(nameLabel)
+
+            runnerGroup.addChild(labelContainer)
+        }
+
         return runnerGroup
     }
+
     
     // Character run animation
     func runAnimation(speedMultiplier: CGFloat = 1.0) -> SKAction {
@@ -148,21 +153,7 @@ class RaceScene: SKScene, ObservableObject {
         scrollSpeed = 0
         playerRunner.childNode(withName: "runnerSprite")?.removeAllActions()
 
-        // Create the finish line
-        let newFinishLine = SKSpriteNode(imageNamed: "FinishLineBanner")
-        newFinishLine.position = CGPoint(x: frame.midX, y: playerRunner.position.y - 75)
-        newFinishLine.zPosition = 10
-        newFinishLine.setScale(0.01)
-        addChild(newFinishLine)
-        finishLine = newFinishLine
-
-        // Stop any ongoing actions
-        finishLine?.removeAllActions()
-
-        // Immediately set the target scale without interpolation
-        finishLine?.setScale(1.5)
-
-        // Show "Race Complete" label
+        // Optional: show "Race Complete" label
         let label = SKLabelNode(text: "Race Complete!")
         label.fontName = "Avenir-Heavy"
         label.fontSize = 40
@@ -171,7 +162,8 @@ class RaceScene: SKScene, ObservableObject {
         label.zPosition = 100
         addChild(label)
     }
-    
+
+
     func formatTime(_ time: TimeInterval) -> String {
         let minutes = Int(time) / 60
         let seconds = Int(time) % 60
@@ -229,7 +221,7 @@ class RaceScene: SKScene, ObservableObject {
         addChild(topCover)
         
         // Create the user's runner
-        playerRunner = createRunner(name: "Ken", nationality: "UnitedStatesFlag")
+        playerRunner = createRunner(name: "Ken", nationality: "UnitedStatesFlag", isPlayer: true)
         let runnerY = -frame.height / 2.5 + (frame.height * 0.2)
         playerRunner.position = CGPoint(x: 0, y: runnerY)
         addChild(playerRunner)
@@ -272,17 +264,16 @@ class RaceScene: SKScene, ObservableObject {
         if lastUpdateTime == 0 { deltaTime = 0 }
         lastUpdateTime = currentTime
 
-        // 1. Update player distance (speed is in meters/sec)
+        // 1. Update player distance (speed in m/s)
         if speedMps > 0 {
             let deltaDistance = CGFloat(speedMps) * CGFloat(deltaTime)
             playerDistance = min(playerDistance + deltaDistance, raceDistance)
         }
 
         // 2. Move ground relative to player speed
-        if speedMps > 0 {
-            guard let groundHeight = scrollingGroundNodes.first?.size.height else { return }
+        if speedMps > 0, let groundHeight = scrollingGroundNodes.first?.size.height {
             for ground in scrollingGroundNodes {
-                ground.position.y -= CGFloat(speedMps) * CGFloat(deltaTime) * 20  // scale factor for realism
+                ground.position.y -= CGFloat(speedMps) * CGFloat(deltaTime) * 20
                 if ground.position.y <= -frame.height/2 - groundHeight {
                     if let topMost = scrollingGroundNodes.max(by: { $0.position.y < $1.position.y }) {
                         ground.position.y = topMost.position.y + groundHeight - 10
@@ -291,10 +282,9 @@ class RaceScene: SKScene, ObservableObject {
             }
         }
 
-        // 3. Update player sprite animation speed
+        // 3. Update player sprite animation
         if let playerSprite = playerRunner.childNode(withName: "runnerSprite") {
             if speedMps <= 0.1 {
-                // Always stop actions if not moving
                 playerSprite.removeAllActions()
                 previousPlayerSpeedMultiplier = 0
             } else {
@@ -318,48 +308,42 @@ class RaceScene: SKScene, ObservableObject {
             let runnerNode = otherRunners[i]
             let runnerSprite = runnerNode.childNode(withName: "runnerSprite")!
 
-            // Update distance
             otherRunnersCurrentDistances[i] = min(otherRunnersCurrentDistances[i] + otherRunnersSpeeds[i], raceDistance)
             let runnerDistance = otherRunnersCurrentDistances[i]
             let delta = runnerDistance - playerDistance
 
-            if runnerDistance >= raceDistance || delta <= 0 || delta > 1000 {
-                runnerNode.isHidden = true
-            } else {
-                runnerNode.isHidden = false
+            runnerNode.isHidden = runnerDistance >= raceDistance || delta <= 0 || delta > 1000
+            if !runnerNode.isHidden {
                 let baseY = -frame.height / 2.5 + (frame.height * 0.2)
                 let offsetX = CGFloat(i - otherRunners.count / 2) * 50
                 runnerNode.position = CGPoint(x: offsetX, y: baseY)
                 let scaleFactor = max(0.3, 1.0 - (delta / 1000.0) * 0.7)
                 runnerNode.setScale(scaleFactor)
 
-                // Animate opponent only if speed changed
+                // Animate opponent if speed changed
                 let newSpeed = otherRunnersSpeeds[i]
                 if previousOpponentSpeeds[i] != newSpeed {
                     runnerSprite.removeAllActions()
-                    let speedMultiplier = newSpeed / 4.5
-                    runnerSprite.run(runAnimation(speedMultiplier: speedMultiplier))
+                    runnerSprite.run(runAnimation(speedMultiplier: newSpeed / 4.5))
                     previousOpponentSpeeds[i] = newSpeed
                 }
             }
-            
-            
+
             if runnerDistance >= raceDistance && finishTimes[i] == nil {
                 finishTimes[i] = currentTime - (startTime ?? currentTime)
             }
         }
-        
-        // Ensure player stays on top visually
+
+        // 6. Ensure player stays on top visually
         playerRunner.zPosition = 10
         for runnerNode in otherRunners {
             runnerNode.zPosition = 5
         }
 
-        // 6. Update leaderboard
+        // 7. Update leaderboard
         let pace = locationManager?.paceString() ?? "0:00"
         var currRunners: [RunnerData] = []
 
-        // Player entry
         currRunners.append(RunnerData(
             name: "Ken",
             distance: playerDistance,
@@ -367,7 +351,6 @@ class RaceScene: SKScene, ObservableObject {
             finishTime: finishTimes[-1]
         ))
 
-        // Opponents
         for i in 0..<otherRunners.count {
             currRunners.append(RunnerData(
                 name: "Opponent \(i+1)",
@@ -377,22 +360,54 @@ class RaceScene: SKScene, ObservableObject {
             ))
         }
 
-        // Sort leaderboard by distance (still running) or finish time (if finished)
         leaderboard = currRunners.sorted {
             if let t1 = $0.finishTime, let t2 = $1.finishTime {
-                return t1 < t2 // both finished → sort by time
+                return t1 < t2
             } else if $0.finishTime != nil {
-                return true // finished beats not finished
+                return true
             } else if $1.finishTime != nil {
                 return false
             } else {
-                return $0.distance > $1.distance // neither finished → sort by distance
+                return $0.distance > $1.distance
             }
         }
 
-        // 7. Update widget
         updateWidgetData()
+
+        // 8. Initialize and update finish line
+        if finishLine == nil {
+            let finishLineNode = SKSpriteNode(imageNamed: "FinishLineBanner")
+            
+            // Start at the top of the bottom part of the black mask
+            finishLineNode.position = CGPoint(x: 0, y: -frame.height/4)
+            
+            finishLineNode.zPosition = 5 // behind player initially
+            finishLineNode.setScale(0.1) // small start scale
+            addChild(finishLineNode)
+            finishLine = finishLineNode
+        }
+
+        if let finishLine = finishLine {
+            let progress = min(playerDistance / raceDistance, 1.0)
+            
+            // Start at top of bottom mask section, end just above player
+            finishLine.position.y = -frame.height/4 + progress
+            
+            // Scale finish line as player approaches
+            finishLine.setScale(0.1 + 1.0 * progress)
+            
+            // Z-index: player in front until crossing
+            if playerDistance < raceDistance {
+                finishLine.zPosition = 5
+                playerRunner.zPosition = 10
+            } else {
+                finishLine.zPosition = 10
+                playerRunner.zPosition = 9
+            }
+        }
+
     }
+
 
 }
 
@@ -444,7 +459,6 @@ struct RunningView: View {
                 }
                 Spacer()
             }
-
             
             // Leaderboard
             VStack(alignment: .leading, spacing: 8) { // change alignment to .leading
