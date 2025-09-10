@@ -77,6 +77,12 @@ class RaceScene: SKScene, ObservableObject {
     // Use a boolean to track if the race is over to stop scrolling
     var isRaceOver = false
     
+    var topCover: SKSpriteNode! // Add this line at the top with your other properties
+    
+    var backgroundTexture: SKTexture!
+    var tunnelEffectNode: SKEffectNode!
+
+    
     // Initialize runner
     func createRunner(name: String, nationality: String, isPlayer: Bool = false) -> SKNode {
         let runnerGroup = SKNode()
@@ -136,10 +142,10 @@ class RaceScene: SKScene, ObservableObject {
     
     // Calculate the runner's pace
     func calculatePace(from speedMps: CGFloat) -> String {
-        guard speedMps > 0 else { return "--:--" }
+        guard speedMps > 0.1 else { return "--:--" }
         let paceSecondsPerKm = 1000.0 / Double(speedMps)
         let minutes = Int(paceSecondsPerKm / 60)
-        let seconds = Int(paceSecondsPerKm) % 60
+        let seconds = Int(paceSecondsPerKm.truncatingRemainder(dividingBy: 60))
         return String(format: "%d:%02d", minutes, seconds)
     }
 
@@ -192,41 +198,39 @@ class RaceScene: SKScene, ObservableObject {
         self.anchorPoint = CGPoint(x: 0.5, y: 0.5)
         self.backgroundColor = .black
         
+        // Create the static background.
+        backgroundTexture = SKTexture(imageNamed: "StarryNight")
+        let backgroundSprite = SKSpriteNode(texture: backgroundTexture)
+        backgroundSprite.anchorPoint = CGPoint(x: 0.5, y: 0) // Center the anchor point
+        backgroundSprite.size = self.size
+        backgroundSprite.position = CGPoint(x: 0, y: -frame.height / 4)
+        backgroundSprite.zPosition = 0 // Place it far in the background
+        addChild(backgroundSprite)
+        
+        // Create 4 ground tiles.
         let groundTexture = SKTexture(imageNamed: "Ground")
         let groundHeight = groundTexture.size().height
         let groundWidth = frame.width
         
-        // Create 4 ground tiles (stacked up above the screen initially)
         for i in 0..<4 {
             let ground = SKSpriteNode(texture: groundTexture, size: CGSize(width: groundWidth, height: groundHeight))
             ground.anchorPoint = CGPoint(x: 0.5, y: 0)
             
-            // Start them stacked from bottom up
-            ground.position = CGPoint(
-                x: 0,
-                y: -frame.height/2 + CGFloat(i) * groundHeight
-            )
+            // Start them stacked from the bottom of the screen up
+            ground.position = CGPoint(x: 0, y: -frame.height / 2 + CGFloat(i) * groundHeight)
             
-            ground.zPosition = -1
+            ground.zPosition = -1 // Place them behind the runners
             scrollingGroundNodes.append(ground)
             addChild(ground)
         }
-        
-        // Add a black box on top of the screen as a "mask"
-        let topCover = SKSpriteNode(color: .black, size: CGSize(width: frame.width, height: frame.height))
-        topCover.anchorPoint = CGPoint(x: 0.5, y: 0) // anchor bottom
-        // Place it at the very top of the screen
-        topCover.position = CGPoint(x: 0, y: -frame.height / 4)
-        topCover.zPosition = 0 // on top of everything
-        addChild(topCover)
-        
-        // Create the user's runner
+
+        // Create the user's runner.
         playerRunner = createRunner(name: "Ken", nationality: "UnitedStatesFlag", isPlayer: true)
         let runnerY = -frame.height / 2.5 + (frame.height * 0.2)
         playerRunner.position = CGPoint(x: 0, y: runnerY)
         addChild(playerRunner)
 
-        // Create some dummy runners
+        // Create dummy runners.
         let opponent1 = createRunner(name: "Bre", nationality: "CanadaFlag")
         opponent1.position = CGPoint(x: -100, y: 100)
         addChild(opponent1)
@@ -237,21 +241,28 @@ class RaceScene: SKScene, ObservableObject {
         addChild(opponent2)
         otherRunners.append(opponent2)
         
-        // Animate opponent 1
+        // Animate the opponent runners.
         if let opponent1Sprite = opponent1.childNode(withName: "runnerSprite") {
             let animation = runAnimation()
             opponent1Sprite.run(animation)
         }
         
-        // Animate opponent 2
         if let opponent2Sprite = opponent2.childNode(withName: "runnerSprite") {
             let animation = runAnimation()
             opponent2Sprite.run(animation)
         }
         
-        // Initialize previous speeds to match initial speeds
+        // Initialize previous speeds to match initial speeds.
         previousOpponentSpeeds = otherRunnersSpeeds
         
+        // Initialize the finish line.
+        let finishLineNode = SKSpriteNode(imageNamed: "FinishLineBanner")
+        finishLineNode.position = CGPoint(x: 0, y: 0)
+        finishLineNode.zPosition = 5
+        finishLineNode.setScale(0.1)
+        addChild(finishLineNode)
+        finishLine = finishLineNode
+
         startTime = CACurrentMediaTime()
     }
     
@@ -371,7 +382,7 @@ class RaceScene: SKScene, ObservableObject {
                 return $0.distance > $1.distance
             }
         }
-
+        
         updateWidgetData()
 
         // 8. Initialize and update finish line
@@ -405,10 +416,7 @@ class RaceScene: SKScene, ObservableObject {
                 playerRunner.zPosition = 9
             }
         }
-
     }
-
-
 }
 
 // Basically renders the runners and the logic for the casual run club
@@ -426,33 +434,40 @@ struct RunningView: View {
         ZStack {
             SpriteView(scene: raceScene)
 
-            // Settings button
+            // Settings button and Player stats
             VStack {
                 HStack {
-                    Spacer() // push everything to the right
+                    Spacer()
                     VStack(alignment: .trailing, spacing: 8) {
-                        // Settings button
                         Button(action: {}) {
                             Image(systemName: "gearshape")
                                 .font(.system(size: 36))
                                 .foregroundColor(.white)
                         }
                         
-                        // Player stats
-                        if let speed = raceScene.locationManager?.currentSpeed {
-                            Text(String(format: "Speed: %.1f m/s", speed))
+                        VStack(alignment: .trailing, spacing: 8) {
+                            if let speed = raceScene.locationManager?.currentSpeed {
+                                Text("Pace: \(raceScene.locationManager?.paceString() ?? "--:--") min/km")
+                                    .font(.caption)
+                                    .foregroundColor(.white)
+                            }
+                            
+                            Text("Distance: \(Int(raceScene.playerDistance)) m")
+                                .font(.caption)
+                                .foregroundColor(.white)
+                            
+                            let progress = raceScene.playerDistance / raceScene.raceDistance * 100
+                            Text(String(format: "Progress: %.0f%%", progress))
                                 .font(.caption)
                                 .foregroundColor(.white)
                         }
-                        
-                        Text("Distance: \(Int(raceScene.playerDistance)) m")
-                            .font(.caption)
-                            .foregroundColor(.white)
-                        
-                        let progress = raceScene.playerDistance / raceScene.raceDistance * 100
-                        Text(String(format: "Progress: %.0f%%", progress))
-                            .font(.caption)
-                            .foregroundColor(.white)
+                        .padding(8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.white.opacity(0.4), lineWidth: 2)
+                                .background(Color.black.opacity(0.2))
+                        )
+                        .cornerRadius(10)
                     }
                     .padding(.top, 40)
                     .padding(.trailing, 16)
@@ -461,67 +476,70 @@ struct RunningView: View {
             }
             
             // Leaderboard
-            VStack(alignment: .leading, spacing: 8) { // change alignment to .leading
+            VStack(alignment: .leading, spacing: 8) {
                 Text("Leaderboard")
                     .font(.headline)
                     .foregroundColor(.yellow)
-                    .padding(.leading, 16) // optional, adds left padding
+                    .padding(.leading, 16)
 
                 ScrollView(.vertical) {
-                    VStack(spacing: 6) {
+                    VStack(spacing: 4) { // Reduced spacing
                         ForEach(Array(raceScene.leaderboard.enumerated()), id: \.element.id) { index, runner in
-                            HStack {
+                            HStack(spacing: 4) { // Reduced spacing
                                 Text("\(index + 1)")
-                                    .frame(width: 24, alignment: .leading)
+                                    .frame(width: 20, alignment: .leading) // Smaller width
                                     .foregroundColor(.yellow)
 
                                 Text(runner.name)
-                                    .frame(maxWidth: 80, alignment: .leading)
+                                    .frame(maxWidth: 60, alignment: .leading) // Smaller width
+                                    .lineLimit(1) // Prevents wrapping
 
                                 Text("\(Int(runner.distance))m")
-                                    .frame(width: 60, alignment: .trailing)
+                                    .frame(width: 45, alignment: .trailing) // Smaller width
 
                                 if index == 0 {
                                     if let time = runner.finishTime {
                                         Text(raceScene.formatTime(time))
-                                            .frame(width: 60, alignment: .trailing)
+                                            .frame(width: 50, alignment: .trailing) // Smaller width
                                     } else {
                                         Text("\(runner.pace) min/km")
-                                            .frame(width: 60, alignment: .trailing)
+                                            .frame(width: 50, alignment: .trailing) // Smaller width
                                     }
                                 } else {
                                     if let leaderTime = raceScene.leaderboard.first?.finishTime,
                                        let time = runner.finishTime {
                                         let gap = time - leaderTime
                                         Text("+\(raceScene.formatTime(gap))")
-                                            .frame(width: 60, alignment: .trailing)
+                                            .frame(width: 50, alignment: .trailing) // Smaller width
                                     } else {
                                         Text("\(runner.pace) min/km")
-                                            .frame(width: 60, alignment: .trailing)
+                                            .frame(width: 50, alignment: .trailing) // Smaller width
                                     }
                                 }
                             }
-                            .padding(6)
+                            .padding(.vertical, 4) // Reduced vertical padding
+                            .padding(.horizontal, 6)
                             .background(
                                 runner.finishTime != nil
-                                    ? Color.green.opacity(0.5)
-                                    : Color.black.opacity(0.4)
+                                ? Color.green.opacity(0.5)
+                                : Color.black.opacity(0.4)
                             )
                             .cornerRadius(8)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 8)
                                     .stroke(Color.white.opacity(0.2), lineWidth: 1)
                             )
-                            .font(.caption)
+                            .font(.system(size: 10)) // Smaller font size
                             .foregroundColor(.white)
                         }
                     }
                 }
-                .frame(maxHeight: 300)
+                .frame(maxHeight: 180) // Shorter height
+                .frame(width: 200) // Narrower width
             }
             .padding(.top, 50)
-            .padding(.leading, 16) // move the whole leaderboard slightly from the left
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading) // align to top left
+            .padding(.leading, 16)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -532,8 +550,7 @@ struct RunningView: View {
                 height: UIScreen.main.bounds.height
             )
             raceScene.scaleMode = .fill
-            
-            raceScene.locationManager = locationManager  // <-- important
+            raceScene.locationManager = locationManager
         }
     }
 }
