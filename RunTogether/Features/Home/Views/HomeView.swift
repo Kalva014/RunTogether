@@ -5,6 +5,9 @@ struct HomeView: View {
     @StateObject private var viewModel: HomeViewModel
     @Environment(\.dismiss) var dismiss
     @State var isSignedOut: Bool = false
+    @State private var isTreadmillMode: Bool = false
+    @State private var selectedDistance: String = "5K" // Default 5k
+    let distances = ["5K", "10K", "Half Marathon(21.1K)", "Full Marathon(42.2K)"]
 
     init() {
         _viewModel = StateObject(wrappedValue: HomeViewModel(appEnvironment: AppEnvironment()))
@@ -26,12 +29,33 @@ struct HomeView: View {
                         .padding()
                 }
                 
-                // Buttons to select what mode to run
-                NavigationLink(destination: RunningView(mode: "Race")) {
-                    Text("Race Mode")
+                Picker("Distance", selection: $selectedDistance) {
+                    ForEach(distances, id: \.self) {
+                        Text($0)
+                    }
+                }
+                .pickerStyle(.menu) // or .segmented, etc.
+                .padding()
+                
+                Toggle("Treadmill Mode", isOn: $isTreadmillMode)
+                    .font(.headline)
+                    .padding()
+                    .frame(width: 250)
+                
+                // Separate NavigationLinks for Normal Mode and Casual Group Run
+                NavigationLink(destination: RunningView(
+                    mode: "Normal",
+                    isTreadmillMode: isTreadmillMode,
+                    distance: selectedDistance
+                )) {
+                    Text("Start Normal Run")
                 }.buttonStyle(.borderedProminent)
                 
-                NavigationLink(destination: RunningView(mode: "Casual Group Run")) {
+                NavigationLink(destination: RunningView(
+                    mode: "Casual Group Run",
+                    isTreadmillMode: false,
+                    distance: selectedDistance
+                )) {
                     Text("Casual Group Run")
                 }.buttonStyle(.borderedProminent)
                 

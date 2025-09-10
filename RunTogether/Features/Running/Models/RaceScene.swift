@@ -13,6 +13,7 @@ class RaceScene: SKScene, ObservableObject {
     @Published var leaderboard: [RunnerData] = []
     @Published var playerDistance: CGFloat = 0
     var locationManager: LocationManager?
+    var isTreadmillMode = false
     
     var playerRunner: SKNode!
     var otherRunners: [SKNode] = []
@@ -44,6 +45,7 @@ class RaceScene: SKScene, ObservableObject {
     
     var backgroundTexture: SKTexture!
     var tunnelEffectNode: SKEffectNode!
+    var currentPlayerSpeed: CLLocationSpeed = 0.0
 
     
     // Initialize runner
@@ -236,10 +238,18 @@ class RaceScene: SKScene, ObservableObject {
     }
     
     override func update(_ currentTime: TimeInterval) {
-        guard let speedMps = locationManager?.currentSpeed else { return }
         guard !isRaceOver else { return }
 
         let deltaTime = calculateDeltaTime(currentTime)
+        
+        let speedMps: CLLocationSpeed
+        if isTreadmillMode {
+            // Use the manually set speed for treadmill mode
+            speedMps = currentPlayerSpeed
+        } else {
+            // Use the GPS speed from locationManager
+            speedMps = locationManager?.currentSpeed ?? 0.0
+        }
 
         updatePlayer(speedMps: speedMps, deltaTime: deltaTime)
         scrollGround(speedMps: speedMps, deltaTime: deltaTime)
@@ -247,9 +257,23 @@ class RaceScene: SKScene, ObservableObject {
         checkForRaceFinish(currentTime: currentTime)
         updateOpponents(currentTime: currentTime)
         ensurePlayerOnTop()
+        
+        let paceString: String?
+        if isTreadmillMode {
+            paceString = calculatePace(from: CGFloat(speedMps))
+        } else {
+            paceString = locationManager?.paceString()
+        }
+        updateLeaderboard(pace: paceString)
+        
         updateLeaderboard(pace: locationManager?.paceString())
         updateWidgetData()
         updateFinishLine()
+    }
+    
+    // Manually set the player's speed
+    func setPlayerSpeed(to speed: CLLocationSpeed) {
+        self.currentPlayerSpeed = speed
     }
 
     private func calculateDeltaTime(_ currentTime: TimeInterval) -> TimeInterval {

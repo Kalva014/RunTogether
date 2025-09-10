@@ -9,9 +9,20 @@ import SpriteKit
 
 struct RunningView: View {
     let mode: String
+    let isTreadmillMode: Bool
+    let distance: String
     
-    @StateObject private var viewModel = RunningViewModel()
+    @StateObject private var viewModel: RunningViewModel
     @State private var isHeartPulsing = false
+    
+    init(mode: String, isTreadmillMode: Bool, distance: String) {
+        self.mode = mode
+        self.isTreadmillMode = isTreadmillMode
+        self.distance = distance
+        
+        _viewModel = StateObject(wrappedValue: RunningViewModel(isTreadmillMode: isTreadmillMode, distance: distance))
+    }
+
 
     var body: some View {
         ZStack {
@@ -19,6 +30,10 @@ struct RunningView: View {
 
             playerStatsView()
             leaderboardView()
+            
+            if isTreadmillMode {
+                treadmillControlsView()
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()
@@ -46,8 +61,9 @@ struct RunningView: View {
 
                     VStack(alignment: .trailing, spacing: 8) {
                         Text("Pace: \(viewModel.playerPace) min/km")
-                            .font(.caption)
-                            .foregroundColor(.white)
+                            .font(.footnote)
+                            .foregroundColor(.yellow)
+                            .bold()
                         
                         Text("Distance: \(viewModel.playerDistance) m")
                             .font(.caption)
@@ -155,9 +171,79 @@ struct RunningView: View {
         .padding(.leading, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
+    
+    private func treadmillControlsView() -> some View {
+        VStack {
+            // Top Spacer pushes content down
+            Spacer()
+            
+            VStack(spacing: 20) {
+                
+                // Button to increase pace (decrease pace in min/km)
+                VStack {
+                    // `RepeatButton` for held-down functionality
+                    RepeatButton(action: {
+                        viewModel.updateTreadmillPace(change: -0.25)
+                    }) {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.white)
+                    }
+                    Text("Faster")
+                        .foregroundColor(.white)
+                        .font(.caption)
+                }
+                
+                // Button to decrease pace (increase pace in min/km)
+                VStack {
+                    // `RepeatButton` for held-down functionality
+                    RepeatButton(action: {
+                        viewModel.updateTreadmillPace(change: 0.25)
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.white)
+                    }
+                    Text("Slower")
+                        .foregroundColor(.white)
+                        .font(.caption)
+                }
+            }
+            .padding(.trailing, 20)
+            
+            // Bottom Spacer pushes content up
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+
+    struct RepeatButton<Content: View>: View {
+        var action: () -> Void
+        var content: () -> Content
+        
+        @State private var timer: Timer? = nil
+        
+        var body: some View {
+            content()
+                .onLongPressGesture(minimumDuration: 0.2, pressing: { isPressing in
+                    if isPressing {
+                        // Initial action on press
+                        action()
+                        // Start the timer to repeat the action
+                        self.timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+                            action()
+                        }
+                    } else {
+                        // Stop the timer when the press ends
+                        self.timer?.invalidate()
+                        self.timer = nil
+                    }
+                }, perform: {})
+        }
+    }
 }
 
 #Preview {
-    RunningView(mode: "Race")
+    RunningView(mode: "Race", isTreadmillMode: true, distance: "10K")
         .environmentObject(AppEnvironment())
 }
