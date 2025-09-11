@@ -185,7 +185,7 @@ struct RunningView: View {
                     RepeatButton(action: {
                         viewModel.updateTreadmillPace(change: -0.25)
                     }) {
-                        Image(systemName: "minus.circle.fill")
+                        Image(systemName: "figure.run.circle.fill")
                             .font(.system(size: 60))
                             .foregroundColor(.white)
                     }
@@ -200,7 +200,7 @@ struct RunningView: View {
                     RepeatButton(action: {
                         viewModel.updateTreadmillPace(change: 0.25)
                     }) {
-                        Image(systemName: "plus.circle.fill")
+                        Image(systemName: "figure.walk.circle.fill")
                             .font(.system(size: 60))
                             .foregroundColor(.white)
                     }
