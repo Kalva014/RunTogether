@@ -44,7 +44,7 @@ struct HomeView: View {
                 
                 // Separate NavigationLinks for Normal Mode and Casual Group Run
                 NavigationLink(destination: RunningView(
-                    mode: "Normal",
+                    mode: "Race",
                     isTreadmillMode: isTreadmillMode,
                     distance: selectedDistance
                 )) {
@@ -52,11 +52,11 @@ struct HomeView: View {
                 }.buttonStyle(.borderedProminent)
                 
                 NavigationLink(destination: RunningView(
-                    mode: "Casual Group Run",
+                    mode: "Casual",
                     isTreadmillMode: false,
                     distance: selectedDistance
                 )) {
-                    Text("Normal Run")
+                    Text("Casual Group Run")
                 }.buttonStyle(.borderedProminent)
                 
                 Button("Sign Out") {

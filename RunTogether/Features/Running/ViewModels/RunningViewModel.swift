@@ -12,45 +12,49 @@ import Combine
 
 class RunningViewModel: ObservableObject {
     @Published var locationManager: LocationManager?
-    @Published var raceScene: RaceScene
+    @Published var raceScene: BaseRunningScene
     @Published var heartRate: Int = 0
     @Published var treadmillPace: Double = 0.0
     private let healthManager = HealthKitManager() // New instance of your HealthKitManager
     private var cancellables = Set<AnyCancellable>()
+    var mode: String = "Race"
     var isTreadmillMode: Bool = false
     var distance: String = "5K"
     
-    
-    init(isTreadmillMode: Bool, distance: String) {
+    init(mode: String, isTreadmillMode: Bool, distance: String) {
+        self.mode = mode
         self.isTreadmillMode = isTreadmillMode
         self.distance = distance
         
-        // 2. Conditionally initialize the locationManager
         if !isTreadmillMode {
             self.locationManager = LocationManager()
         } else {
             self.locationManager = nil
-            
-            // Initialize treadmillPace to 10 min/km(aka below average pace) for treadmill mode
             self.treadmillPace = 10.0
         }
-
-        raceScene = RaceScene()
-        raceScene.locationManager = locationManager
-        raceScene.isTreadmillMode = self.isTreadmillMode
         
-        // 4. Convert the string to a Double before setting raceScene.raceDistance
-        let convertedDistance = convertDistanceStringToMeters(distance)
-        raceScene.raceDistance = convertedDistance
+        // First initialize raceScene directly
+        if mode == "Race" {
+            self.raceScene = RaceScene(size: UIScreen.main.bounds.size)
+        } else {
+            self.raceScene = CasualScene(size: UIScreen.main.bounds.size)
+        }
         
-        // Set up observation of raceScene changes
-        raceScene.objectWillChange.sink { [weak self] _ in
-            self?.objectWillChange.send()
-        }.store(in: &cancellables)
+        // Now we can safely configure it
+        self.raceScene.locationManager = self.locationManager
+        self.raceScene.isTreadmillMode = self.isTreadmillMode
+        self.raceScene.raceDistance = convertDistanceStringToMeters(distance)
         
-        // Request HealthKit authorization when the ViewModel is initialized
+        // After full initialization, we can use Combine & HealthKit
+        self.raceScene.objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+        
         requestHealthKitAuthorization()
     }
+
       
     private func requestHealthKitAuthorization() {
         healthManager.requestAuthorization { [weak self] success in

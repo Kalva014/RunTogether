@@ -9,15 +9,15 @@ import SpriteKit
 import CoreLocation
 
 // Basically renders the runners and logic for racing
-class RaceScene: SKScene, ObservableObject {
-    @Published var leaderboard: [RunnerData] = []
-    @Published var playerDistance: CGFloat = 0
-    var locationManager: LocationManager?
-    var isTreadmillMode = false
+class RaceScene: BaseRunningScene {
+//    @Published var leaderboard: [RunnerData] = []
+//    @Published var playerDistance: CGFloat = 0
+//    var locationManager: LocationManager?
+//    var isTreadmillMode = false
     
     var playerRunner: SKNode!
     var otherRunners: [SKNode] = []
-    var raceDistance: CGFloat = 100 // e.g., 5K in meters
+//    var raceDistance: CGFloat = 100 // e.g., 5K in meters
     var scrollSpeed: CGFloat = 5.0
     var finishLine: SKSpriteNode!
     
@@ -132,13 +132,6 @@ class RaceScene: SKScene, ObservableObject {
         label.position = CGPoint(x: 0, y: 0)
         label.zPosition = 100
         addChild(label)
-    }
-
-
-    func formatTime(_ time: TimeInterval) -> String {
-        let minutes = Int(time) / 60
-        let seconds = Int(time) % 60
-        return String(format: "%d:%02d", minutes, seconds)
     }
     
     // Updating player stats each frame, save them to the widget
@@ -272,7 +265,7 @@ class RaceScene: SKScene, ObservableObject {
     }
     
     // Manually set the player's speed
-    func setPlayerSpeed(to speed: CLLocationSpeed) {
+    override func setPlayerSpeed(to speed: CLLocationSpeed) {
         self.currentPlayerSpeed = speed
     }
 

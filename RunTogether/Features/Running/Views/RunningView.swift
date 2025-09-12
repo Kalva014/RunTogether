@@ -20,7 +20,7 @@ struct RunningView: View {
         self.isTreadmillMode = isTreadmillMode
         self.distance = distance
         
-        _viewModel = StateObject(wrappedValue: RunningViewModel(isTreadmillMode: isTreadmillMode, distance: distance))
+        _viewModel = StateObject(wrappedValue: RunningViewModel(mode: mode, isTreadmillMode: isTreadmillMode, distance: distance))
     }
 
 
@@ -107,60 +107,23 @@ struct RunningView: View {
 
     private func leaderboardView() -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Leaderboard")
-                .font(.headline)
-                .foregroundColor(.yellow)
-                .padding(.leading, 16)
+            if mode == "Race" {
+                Text("Leaderboard")
+                    .font(.headline)
+                    .foregroundColor(.yellow)
+                    .padding(.leading, 16)
+            }
+            else if mode == "Casual" {
+                Text("Runners")
+                    .font(.headline)
+                    .foregroundColor(.yellow)
+                    .padding(.leading, 16)
+            }
 
             ScrollView(.vertical) {
                 VStack(spacing: 4) {
                     ForEach(Array(viewModel.leaderboard.enumerated()), id: \.element.id) { index, runner in
-                        HStack(spacing: 4) {
-                            Text("\(index + 1)")
-                                .frame(width: 20, alignment: .leading)
-                                .foregroundColor(.yellow)
-
-                            Text(runner.name)
-                                .frame(maxWidth: 60, alignment: .leading)
-                                .lineLimit(1)
-
-                            Text("\(Int(runner.distance))m")
-                                .frame(width: 45, alignment: .trailing)
-
-                            if index == 0 {
-                                if let time = runner.finishTime {
-                                    Text(viewModel.raceScene.formatTime(time))
-                                        .frame(width: 50, alignment: .trailing)
-                                } else {
-                                    Text("\(runner.pace) min/km")
-                                        .frame(width: 50, alignment: .trailing)
-                                }
-                            } else {
-                                if let leaderTime = viewModel.leaderboard.first?.finishTime,
-                                   let time = runner.finishTime {
-                                    let gap = time - leaderTime
-                                    Text("+\(viewModel.raceScene.formatTime(gap))")
-                                        .frame(width: 50, alignment: .trailing)
-                                } else {
-                                    Text("\(runner.pace) min/km")
-                                        .frame(width: 50, alignment: .trailing)
-                                }
-                            }
-                        }
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 6)
-                        .background(
-                            runner.finishTime != nil
-                            ? Color.green.opacity(0.5)
-                            : Color.black.opacity(0.4)
-                        )
-                        .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.white.opacity(0.2), lineWidth: 1)
-                        )
-                        .font(.system(size: 10))
-                        .foregroundColor(.white)
+                        leaderboardRow(index: index, runner: runner)
                     }
                 }
             }
@@ -171,6 +134,56 @@ struct RunningView: View {
         .padding(.leading, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
+    
+    private func leaderboardRow(index: Int, runner: RunnerData) -> some View {
+        HStack(spacing: 4) {
+            Text("\(index + 1)")
+                .frame(width: 20, alignment: .leading)
+                .foregroundColor(.yellow)
+
+            Text(runner.name)
+                .frame(maxWidth: 60, alignment: .leading)
+                .lineLimit(1)
+
+            Text("\(Int(runner.distance))m")
+                .frame(width: 45, alignment: .trailing)
+
+            Text(rowExtraText(index: index, runner: runner))
+                .frame(width: 50, alignment: .trailing)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .background(runner.finishTime != nil
+                    ? Color.green.opacity(0.5)
+                    : Color.black.opacity(0.4))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+        )
+        .font(.system(size: 10))
+        .foregroundColor(.white)
+    }
+
+    private func rowExtraText(index: Int, runner: RunnerData) -> String {
+        if index == 0 {
+            if let time = runner.finishTime {
+                return viewModel.raceScene.formatTime(time)
+            } else {
+                return "\(runner.pace) min/km"
+            }
+        } else {
+            if let leaderTime = viewModel.leaderboard.first?.finishTime,
+               let time = runner.finishTime {
+                let gap = time - leaderTime
+                return "+\(viewModel.raceScene.formatTime(gap))"
+            } else {
+                return "\(runner.pace) min/km"
+            }
+        }
+    }
+
+
     
     private func treadmillControlsView() -> some View {
         VStack {
@@ -244,6 +257,6 @@ struct RunningView: View {
 }
 
 #Preview {
-    RunningView(mode: "Race", isTreadmillMode: true, distance: "10K")
+    RunningView(mode: "Casual", isTreadmillMode: true, distance: "5K")
         .environmentObject(AppEnvironment())
 }
