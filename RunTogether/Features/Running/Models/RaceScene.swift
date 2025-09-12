@@ -31,8 +31,8 @@ class RaceScene: SKScene, ObservableObject {
     
     // Initialize runners with starting distances
     var otherRunnersCurrentDistances: [CGFloat] = [50, 120] // starting distances
-    var otherRunnersSpeeds: [CGFloat] = [4.5, 5.2]          // meters per frame
-    
+    var otherRunnersSpeeds: [CGFloat] = [2.8, 3.5]
+
     var previousOpponentSpeeds: [CGFloat] = []
     var previousPlayerSpeedMultiplier: CGFloat = 0.0
     
@@ -237,11 +237,12 @@ class RaceScene: SKScene, ObservableObject {
         finishLine = finishLineNode
     }
     
+    // Ran every frame
     override func update(_ currentTime: TimeInterval) {
         guard !isRaceOver else { return }
 
         let deltaTime = calculateDeltaTime(currentTime)
-        
+
         let speedMps: CLLocationSpeed
         if isTreadmillMode {
             // Use the manually set speed for treadmill mode
@@ -255,7 +256,7 @@ class RaceScene: SKScene, ObservableObject {
         scrollGround(speedMps: speedMps, deltaTime: deltaTime)
         updatePlayerAnimation(speedMps: speedMps)
         checkForRaceFinish(currentTime: currentTime)
-        updateOpponents(currentTime: currentTime)
+        updateOpponents(deltaTime: deltaTime, currentTime: currentTime)
         ensurePlayerOnTop()
         
         let paceString: String?
@@ -264,9 +265,8 @@ class RaceScene: SKScene, ObservableObject {
         } else {
             paceString = locationManager?.paceString()
         }
-        updateLeaderboard(pace: paceString)
         
-        updateLeaderboard(pace: locationManager?.paceString())
+        updateLeaderboard(pace: paceString)
         updateWidgetData()
         updateFinishLine()
     }
@@ -326,36 +326,65 @@ class RaceScene: SKScene, ObservableObject {
         }
     }
 
-    private func updateOpponents(currentTime: TimeInterval) {
+    /// Updates all opponent runners’ positions, animations, and finish states each frame.
+    /// - Parameters:
+    ///   - deltaTime: The time elapsed since the last frame (in seconds).
+    ///   - currentTime: The current system/game time (used to record finish times).
+    private func updateOpponents(deltaTime: TimeInterval, currentTime: TimeInterval) {
         for i in 0..<otherRunners.count {
             let runnerNode = otherRunners[i]
             let runnerSprite = runnerNode.childNode(withName: "runnerSprite")!
 
-            otherRunnersCurrentDistances[i] = min(otherRunnersCurrentDistances[i] + otherRunnersSpeeds[i], raceDistance)
-            let runnerDistance = otherRunnersCurrentDistances[i]
-            let delta = runnerDistance - playerDistance
+            // 1. Update this runner’s distance traveled
+            let deltaDistance = otherRunnersSpeeds[i] * CGFloat(deltaTime)
+            otherRunnersCurrentDistances[i] = min(
+                otherRunnersCurrentDistances[i] + deltaDistance,
+                raceDistance
+            )
 
-            runnerNode.isHidden = runnerDistance >= raceDistance || delta <= 0 || delta > 1000
+            let runnerDistance = otherRunnersCurrentDistances[i]
+            let delta = runnerDistance - playerDistance // gap compared to player
+
+            // 2. Hide runner if finished or outside of visible range
+            runnerNode.isHidden = runnerDistance >= raceDistance || delta <= -100 || delta > 500
+
             if !runnerNode.isHidden {
+                // 3. Base Y = ground line for player
                 let baseY = -frame.height / 2.5 + (frame.height * 0.2)
-                let offsetX = CGFloat(i - otherRunners.count / 2) * 50
-                runnerNode.position = CGPoint(x: offsetX, y: baseY)
-                let scaleFactor = max(0.3, 1.0 - (delta / 1000.0) * 0.7)
+
+                // 4. Map distance gap (0–1000m) → Y offset (depth effect)
+                let maxVisibleDelta: CGFloat = 1000
+                let trackDepth: CGFloat = frame.height * 0.4 // how much vertical range we use
+                let progress = min(delta / maxVisibleDelta, 1.0)
+                let offsetY = progress * trackDepth
+
+                // 5. Lanes: spread runners horizontally without shifting for distance
+                let laneSpacing: CGFloat = 80
+                let laneOffset = CGFloat(i - otherRunners.count / 2) * laneSpacing
+
+                // 6. Update runner’s screen position
+                runnerNode.position = CGPoint(x: laneOffset, y: baseY + offsetY)
+
+                // 7. Scale runner by distance gap (farther = smaller)
+                let scaleFactor = max(0.3, 1.0 - (delta / maxVisibleDelta) * 0.7)
                 runnerNode.setScale(scaleFactor)
 
+                // 8. Update animation speed if this runner’s speed changed
                 let newSpeed = otherRunnersSpeeds[i]
                 if previousOpponentSpeeds[i] != newSpeed {
                     runnerSprite.removeAllActions()
-                    runnerSprite.run(runAnimation(speedMultiplier: newSpeed / 4.5))
+                    runnerSprite.run(runAnimation(speedMultiplier: newSpeed / 3.0))
                     previousOpponentSpeeds[i] = newSpeed
                 }
             }
 
+            // 9. Record finish time if runner crosses finish line
             if runnerDistance >= raceDistance && finishTimes[i] == nil {
                 finishTimes[i] = currentTime - (startTime ?? currentTime)
             }
         }
     }
+
 
     private func ensurePlayerOnTop() {
         playerRunner.zPosition = 10
