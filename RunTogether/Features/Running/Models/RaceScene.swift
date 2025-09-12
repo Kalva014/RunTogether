@@ -346,27 +346,28 @@ class RaceScene: SKScene, ObservableObject {
             let delta = runnerDistance - playerDistance // gap compared to player
 
             // 2. Hide runner if finished or outside of visible range
-            runnerNode.isHidden = runnerDistance >= raceDistance || delta <= -100 || delta > 500
+            runnerNode.isHidden = runnerDistance >= raceDistance || delta <= -50 || delta > 500
 
             if !runnerNode.isHidden {
-                // 3. Base Y = ground line for player
+                // 3. Base Y = ground line for runners
                 let baseY = -frame.height / 2.5 + (frame.height * 0.2)
 
-                // 4. Map distance gap (0–1000m) → Y offset (depth effect)
-                let maxVisibleDelta: CGFloat = 1000
-                let trackDepth: CGFloat = frame.height * 0.4 // how much vertical range we use
+                // 4. Map distance gap (0–1000m) → screen X position
+                let maxVisibleDelta: CGFloat = 500   // shrink fully within 500m instead of 1000m
+                let trackWidth: CGFloat = frame.width * 0.8
                 let progress = min(delta / maxVisibleDelta, 1.0)
-                let offsetY = progress * trackDepth
+                let offsetX = progress * trackWidth - (trackWidth / 2)
 
-                // 5. Lanes: spread runners horizontally without shifting for distance
+                // 5. Stagger runners slightly left/right into "lanes"
                 let laneSpacing: CGFloat = 80
                 let laneOffset = CGFloat(i - otherRunners.count / 2) * laneSpacing
 
                 // 6. Update runner’s screen position
-                runnerNode.position = CGPoint(x: laneOffset, y: baseY + offsetY)
+                runnerNode.position = CGPoint(x: offsetX + laneOffset, y: baseY)
 
-                // 7. Scale runner by distance gap (farther = smaller)
-                let scaleFactor = max(0.3, 1.0 - (delta / maxVisibleDelta) * 0.7)
+                // 7. Scale runner by distance gap (farther = smaller, shrinks faster now)
+                let shrinkStrength: CGFloat = 1.0    // stronger scaling curve
+                let scaleFactor = max(0.2, 1.0 - (delta / maxVisibleDelta) * shrinkStrength)
                 runnerNode.setScale(scaleFactor)
 
                 // 8. Update animation speed if this runner’s speed changed
@@ -384,7 +385,6 @@ class RaceScene: SKScene, ObservableObject {
             }
         }
     }
-
 
     private func ensurePlayerOnTop() {
         playerRunner.zPosition = 10
