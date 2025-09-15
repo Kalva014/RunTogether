@@ -23,4 +23,5 @@ struct RunnerData: Identifiable {
     let distance: CGFloat
     let pace: String
     let finishTime: TimeInterval?
+    var speed: Double? 
 }

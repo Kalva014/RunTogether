@@ -45,7 +45,6 @@ class RaceScene: BaseRunningScene {
     
     var backgroundTexture: SKTexture!
     var tunnelEffectNode: SKEffectNode!
-    var currentPlayerSpeed: CLLocationSpeed = 0.0
 
     
     // Initialize runner
@@ -105,14 +104,18 @@ class RaceScene: BaseRunningScene {
         sprite.removeAllActions()
     }
     
-    // Calculate the runner's pace
-    func calculatePace(from speedMps: CGFloat) -> String {
-        guard speedMps > 0.1 else { return "--:--" }
-        let paceSecondsPerKm = 1000.0 / Double(speedMps)
-        let minutes = Int(paceSecondsPerKm / 60)
-        let seconds = Int(paceSecondsPerKm.truncatingRemainder(dividingBy: 60))
-        return String(format: "%d:%02d", minutes, seconds)
-    }
+//    // Calculate the runner's pace
+//    func calculatePace(from speedMps: CGFloat, useMiles: Bool) -> String {
+//        guard speedMps > 0.1 else { return "--:--" }
+//        
+//        let metersPerUnit = useMiles ? 1609.34 : 1000.0
+//        let paceSecondsPerUnit = metersPerUnit / Double(speedMps)
+//        
+//        let minutes = Int(paceSecondsPerUnit / 60)
+//        let seconds = Int(paceSecondsPerUnit.truncatingRemainder(dividingBy: 60))
+//        return String(format: "%d:%02d", minutes, seconds)
+//    }
+
 
     // Handle race completion
     func raceFinished() {
@@ -254,7 +257,7 @@ class RaceScene: BaseRunningScene {
         
         let paceString: String?
         if isTreadmillMode {
-            paceString = calculatePace(from: CGFloat(speedMps))
+            paceString = calculatePace(from: CGFloat(speedMps), useMiles: useMiles)
         } else {
             paceString = locationManager?.paceString()
         }
@@ -264,7 +267,6 @@ class RaceScene: BaseRunningScene {
         updateFinishLine()
     }
     
-    // Manually set the player's speed
     override func setPlayerSpeed(to speed: CLLocationSpeed) {
         self.currentPlayerSpeed = speed
     }
@@ -400,7 +402,7 @@ class RaceScene: BaseRunningScene {
             currRunners.append(RunnerData(
                 name: "Opponent \(i+1)",
                 distance: otherRunnersCurrentDistances[i],
-                pace: calculatePace(from: otherRunnersSpeeds[i]),
+                pace: calculatePace(from: otherRunnersSpeeds[i], useMiles: useMiles),
                 finishTime: finishTimes[i]
             ))
         }

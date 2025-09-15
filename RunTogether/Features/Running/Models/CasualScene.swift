@@ -45,7 +45,6 @@ class CasualScene: BaseRunningScene {
     
     var backgroundTexture: SKTexture!
     var tunnelEffectNode: SKEffectNode!
-    var currentPlayerSpeed: CLLocationSpeed = 0.0
 
     
     // Initialize runner
@@ -105,14 +104,18 @@ class CasualScene: BaseRunningScene {
         sprite.removeAllActions()
     }
     
-    // Calculate the runner's pace
-    func calculatePace(from speedMps: CGFloat) -> String {
-        guard speedMps > 0.1 else { return "--:--" }
-        let paceSecondsPerKm = 1000.0 / Double(speedMps)
-        let minutes = Int(paceSecondsPerKm / 60)
-        let seconds = Int(paceSecondsPerKm.truncatingRemainder(dividingBy: 60))
-        return String(format: "%d:%02d", minutes, seconds)
-    }
+//    // Calculate the runner's pace
+//    func calculatePace(from speedMps: CGFloat, useMiles: Bool) -> String {
+//        guard speedMps > 0.1 else { return "--:--" }
+//        
+//        let metersPerUnit = useMiles ? 1609.34 : 1000.0
+//        let paceSecondsPerUnit = metersPerUnit / Double(speedMps)
+//        
+//        let minutes = Int(paceSecondsPerUnit / 60)
+//        let seconds = Int(paceSecondsPerUnit.truncatingRemainder(dividingBy: 60))
+//        return String(format: "%d:%02d", minutes, seconds)
+//    }
+
 
     // Handle race completion
     func raceFinished() {
@@ -254,7 +257,7 @@ class CasualScene: BaseRunningScene {
         
         let paceString: String?
         if isTreadmillMode {
-            paceString = calculatePace(from: CGFloat(speedMps))
+            paceString = calculatePace(from: CGFloat(speedMps), useMiles: useMiles)
         } else {
             paceString = locationManager?.paceString()
         }
@@ -268,6 +271,7 @@ class CasualScene: BaseRunningScene {
     override func setPlayerSpeed(to speed: CLLocationSpeed) {
         self.currentPlayerSpeed = speed
     }
+
 
     private func calculateDeltaTime(_ currentTime: TimeInterval) -> TimeInterval {
         var deltaTime = currentTime - lastUpdateTime
@@ -389,7 +393,6 @@ class CasualScene: BaseRunningScene {
     private func updateLeaderboard(pace: String?) {
         var currRunners: [RunnerData] = []
 
-        // Add the player first
         currRunners.append(RunnerData(
             name: "Ken",
             distance: playerDistance,
@@ -397,18 +400,15 @@ class CasualScene: BaseRunningScene {
             finishTime: finishTimes[-1]
         ))
 
-        // Add opponents
         for i in 0..<otherRunners.count {
             currRunners.append(RunnerData(
                 name: "Opponent \(i+1)",
                 distance: otherRunnersCurrentDistances[i],
-                pace: calculatePace(from: otherRunnersSpeeds[i]),
+                pace: calculatePace(from: otherRunnersSpeeds[i], useMiles: useMiles), // or use a scene property
                 finishTime: finishTimes[i]
             ))
         }
 
-        // Sort by pace (ascending) for casual scene
-        // "--:--" pace (if speed = 0) will go to the bottom
         leaderboard = currRunners.sorted { runner1, runner2 in
             let pace1Components = runner1.pace.split(separator: ":").compactMap { Int($0) }
             let pace2Components = runner2.pace.split(separator: ":").compactMap { Int($0) }

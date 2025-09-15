@@ -11,16 +11,18 @@ struct RunningView: View {
     let mode: String
     let isTreadmillMode: Bool
     let distance: String
+    var useMiles: Bool
     
     @StateObject private var viewModel: RunningViewModel
     @State private var isHeartPulsing = false
     
-    init(mode: String, isTreadmillMode: Bool, distance: String) {
+    init(mode: String, isTreadmillMode: Bool, distance: String, useMiles: Bool) {
         self.mode = mode
         self.isTreadmillMode = isTreadmillMode
         self.distance = distance
+        self.useMiles = useMiles
         
-        _viewModel = StateObject(wrappedValue: RunningViewModel(mode: mode, isTreadmillMode: isTreadmillMode, distance: distance))
+        _viewModel = StateObject(wrappedValue: RunningViewModel(mode: mode, isTreadmillMode: isTreadmillMode, distance: distance, useMiles: useMiles))
     }
 
 
@@ -48,6 +50,73 @@ struct RunningView: View {
 
     // MARK: - Subviews
 
+//    private func playerStatsView() -> some View {
+//        VStack {
+//            HStack {
+//                Spacer()
+//                VStack(alignment: .trailing, spacing: 8) {
+//                    Button(action: {}) {
+//                        Image(systemName: "gearshape")
+//                            .font(.system(size: 36))
+//                            .foregroundColor(.white)
+//                    }
+//
+//                    VStack(alignment: .trailing, spacing: 8) {
+//                        if useMiles == false {
+//                            Text("Pace: \(viewModel.playerPace) min/km")
+//                                .font(.footnote)
+//                                .foregroundColor(.yellow)
+//                                .bold()
+//                            
+//                            Text("Distance: \(viewModel.playerDistance) m")
+//                                .font(.caption)
+//                                .foregroundColor(.white)
+//                        } else {
+//                            Text("Pace: \(viewModel.playerPace) min/mi")
+//                                .font(.footnote)
+//                                .foregroundColor(.yellow)
+//                                .bold()
+//                            
+//                            Text("Distance: \(viewModel.playerDistance) mi")
+//                                .font(.caption)
+//                                .foregroundColor(.white)
+//                        }
+//
+//                        Text(viewModel.playerProgress)
+//                            .font(.caption)
+//                            .foregroundColor(.white)
+//                        
+//                        // Live heartbeat
+//                        HStack {
+//                            Text("\(viewModel.playerHeartbeat) BPM")
+//                                .font(.caption)
+//                                .foregroundColor(.white)
+//                            
+//                            Image(systemName: "heart.fill")
+//                                .font(.footnote)
+//                                .foregroundColor(.red)
+//                                .scaleEffect(isHeartPulsing ? 1.2 : 1.0)
+//                                .onAppear {
+//                                    withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+//                                        isHeartPulsing = true
+//                                    }
+//                                }
+//                        }
+//                    }
+//                    .padding(8)
+//                    .background(
+//                        RoundedRectangle(cornerRadius: 10)
+//                            .stroke(Color.white.opacity(0.4), lineWidth: 2)
+//                            .background(Color.black.opacity(0.2))
+//                    )
+//                    .cornerRadius(10)
+//                }
+//                .padding(.top, 40)
+//                .padding(.trailing, 16)
+//            }
+//            Spacer()
+//        }
+//    }
     private func playerStatsView() -> some View {
         VStack {
             HStack {
@@ -60,25 +129,32 @@ struct RunningView: View {
                     }
 
                     VStack(alignment: .trailing, spacing: 8) {
-                        Text("Pace: \(viewModel.playerPace) min/km")
+                        // Pace
+                        Text("Pace: \(viewModel.playerPace) \(useMiles ? "min/mi" : "min/km")")
                             .font(.footnote)
                             .foregroundColor(.yellow)
                             .bold()
-                        
-                        Text("Distance: \(viewModel.playerDistance) m")
+
+                        // Distance (formatted string)
+                        Text("Distance: \(viewModel.playerDistanceString)")
                             .font(.caption)
                             .foregroundColor(.white)
 
-                        Text(viewModel.playerProgress)
+                        // Progress % + covered/total
+                        Text(viewModel.playerProgressPercent)
                             .font(.caption)
                             .foregroundColor(.white)
-                        
+
+                        Text(viewModel.playerProgressDetail)
+                            .font(.caption2)
+                            .foregroundColor(.gray)
+
                         // Live heartbeat
                         HStack {
                             Text("\(viewModel.playerHeartbeat) BPM")
                                 .font(.caption)
                                 .foregroundColor(.white)
-                            
+
                             Image(systemName: "heart.fill")
                                 .font(.footnote)
                                 .foregroundColor(.red)
@@ -104,6 +180,7 @@ struct RunningView: View {
             Spacer()
         }
     }
+
 
     private func leaderboardView() -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -145,7 +222,7 @@ struct RunningView: View {
                 .frame(maxWidth: 60, alignment: .leading)
                 .lineLimit(1)
 
-            Text("\(Int(runner.distance))m")
+            Text(viewModel.formattedDistance(runner.distance))
                 .frame(width: 45, alignment: .trailing)
 
             Text(rowExtraText(index: index, runner: runner))
@@ -166,23 +243,41 @@ struct RunningView: View {
     }
 
     private func rowExtraText(index: Int, runner: RunnerData) -> String {
-        if index == 0 {
-            if let time = runner.finishTime {
-                return viewModel.raceScene.formatTime(time)
+        if useMiles == false {
+            if index == 0 {
+                if let time = runner.finishTime {
+                    return viewModel.raceScene.formatTime(time)
+                } else {
+                    return "\(runner.pace) min/km"
+                }
             } else {
-                return "\(runner.pace) min/km"
+                if let leaderTime = viewModel.leaderboard.first?.finishTime,
+                   let time = runner.finishTime {
+                    let gap = time - leaderTime
+                    return "+\(viewModel.raceScene.formatTime(gap))"
+                } else {
+                    return "\(runner.pace) min/km"
+                }
             }
-        } else {
-            if let leaderTime = viewModel.leaderboard.first?.finishTime,
-               let time = runner.finishTime {
-                let gap = time - leaderTime
-                return "+\(viewModel.raceScene.formatTime(gap))"
+        }
+        else {
+            if index == 0 {
+                if let time = runner.finishTime {
+                    return viewModel.raceScene.formatTime(time)
+                } else {
+                    return "\(runner.pace) min/mi"
+                }
             } else {
-                return "\(runner.pace) min/km"
+                if let leaderTime = viewModel.leaderboard.first?.finishTime,
+                   let time = runner.finishTime {
+                    let gap = time - leaderTime
+                    return "+\(viewModel.raceScene.formatTime(gap))"
+                } else {
+                    return "\(runner.pace) min/mi"
+                }
             }
         }
     }
-
 
     
     private func treadmillControlsView() -> some View {
@@ -257,6 +352,6 @@ struct RunningView: View {
 }
 
 #Preview {
-    RunningView(mode: "Casual", isTreadmillMode: true, distance: "5K")
+    RunningView(mode: "Casual", isTreadmillMode: false, distance: "26.2 Miles", useMiles: true)
         .environmentObject(AppEnvironment())
 }

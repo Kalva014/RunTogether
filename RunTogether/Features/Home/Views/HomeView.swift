@@ -7,7 +7,16 @@ struct HomeView: View {
     @State var isSignedOut: Bool = false
     @State private var isTreadmillMode: Bool = false
     @State private var selectedDistance: String = "5K" // Default 5k
-    let distances = ["5K", "10K", "Half Marathon(21.1K)", "Full Marathon(42.2K)"]
+    @State private var useMiles: Bool = false
+    
+    var distanceOptions: [String] {
+        if useMiles {
+            return ["1 Mile", "3.1 Miles", "6.2 Miles", "13.1 Miles", "26.2 Miles"]
+        } else {
+            return ["5K", "10K", "Half Marathon(21.1K)", "Full Marathon(42.2K)"]
+        }
+    }
+
 
     init() {
         _viewModel = StateObject(wrappedValue: HomeViewModel(appEnvironment: AppEnvironment()))
@@ -29,50 +38,56 @@ struct HomeView: View {
                         .padding()
                 }
                 
-                Picker("Distance", selection: $selectedDistance) {
-                    ForEach(distances, id: \.self) {
-                        Text($0)
-                    }
-                }
-                .pickerStyle(.menu) // or .segmented, etc.
-                .padding()
-                
-                Toggle("Treadmill Mode", isOn: $isTreadmillMode)
-                    .font(.headline)
-                    .padding()
-                    .frame(width: 250)
-                
-                // Separate NavigationLinks for Normal Mode and Casual Group Run
-                NavigationLink(destination: RunningView(
-                    mode: "Race",
-                    isTreadmillMode: isTreadmillMode,
-                    distance: selectedDistance
-                )) {
-                    Text("Race")
-                }.buttonStyle(.borderedProminent)
-                
-                NavigationLink(destination: RunningView(
-                    mode: "Casual",
-                    isTreadmillMode: false,
-                    distance: selectedDistance
-                )) {
-                    Text("Casual Group Run")
-                }.buttonStyle(.borderedProminent)
-                
-                Button("Sign Out") {
-                    Task {
-                        await viewModel.signOut()
-                        isSignedOut = true
-                        dismiss()
-                    }
-                }
-                .padding()
-                .background(Color.red)
-                .foregroundColor(.white)
-                .cornerRadius(10)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Unit Picker
+               Picker("Units", selection: $useMiles) {
+                   Text("Kilometers").tag(false)
+                   Text("Miles").tag(true)
+               }
+               .pickerStyle(.segmented)
+               .padding()
+               .frame(width: 300)
+
+               // Distance Picker
+               HStack {
+                   Text("Distance")
+                       .font(.headline)
+                       .padding()
+                   Picker("Distance", selection: $selectedDistance) {
+                       ForEach(distanceOptions, id: \.self) { distance in
+                           Text(distance)
+                       }
+                   }
+                   .pickerStyle(.menu)
+                   .padding()
+               }
+
+               Toggle("Treadmill Mode", isOn: $isTreadmillMode)
+                   .font(.headline)
+                   .padding()
+                   .frame(width: 250)
+               
+               NavigationLink(destination: RunningView(
+                   mode: "Race",
+                   isTreadmillMode: isTreadmillMode,
+                   distance: selectedDistance,
+                   useMiles: useMiles
+               )) {
+                   Text("Race")
+               }.buttonStyle(.borderedProminent)
+               
+               NavigationLink(destination: RunningView(
+                   mode: "Casual",
+                   isTreadmillMode: false,
+                   distance: selectedDistance,
+                   useMiles: useMiles
+               )) {
+                   Text("Casual Group Run")
+               }.buttonStyle(.borderedProminent)
+           }
+            .padding()
+            .cornerRadius(10)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

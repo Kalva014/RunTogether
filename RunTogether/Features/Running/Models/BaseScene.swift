@@ -24,6 +24,10 @@ class BaseRunningScene: SKScene, ObservableObject {
     var raceDistance: Double = 5000.0 // Default 5K
     private var playerSpeed: Double = 0.0
     
+    var useMiles: Bool = true
+    var currentPlayerSpeed: CLLocationSpeed = 0.0
+
+    
     // MARK: - Combine
     var cancellables = Set<AnyCancellable>()
     
@@ -58,6 +62,18 @@ class BaseRunningScene: SKScene, ObservableObject {
     func formatTime(_ time: TimeInterval) -> String {
         let minutes = Int(time) / 60
         let seconds = Int(time) % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+    
+    /// Calculates pace in min/km or min/mile depending on useMiles
+    func calculatePace(from speedMps: CGFloat, useMiles: Bool) -> String {
+        guard speedMps > 0.1 else { return "--:--" }
+        
+        let metersPerUnit = useMiles ? 1609.34 : 1000.0
+        let paceSecondsPerUnit = metersPerUnit / Double(speedMps)
+        
+        let minutes = Int(paceSecondsPerUnit / 60)
+        let seconds = Int(paceSecondsPerUnit.truncatingRemainder(dividingBy: 60))
         return String(format: "%d:%02d", minutes, seconds)
     }
 }

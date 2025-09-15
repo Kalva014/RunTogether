@@ -34,11 +34,16 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         print("Location error: \(error.localizedDescription)")
     }
     
-    func paceString() -> String {
+    /// Returns the pace as a formatted string ("min:sec") using current speed.
+    /// - Parameter useMiles: true for miles, false for kilometers
+    func paceString(useMiles: Bool = false) -> String {
         guard currentSpeed > 0 else { return "--:--" }
-        let paceSecondsPerKm = 1000 / currentSpeed
-        let minutes = Int(paceSecondsPerKm / 60)
-        let seconds = Int(paceSecondsPerKm) % 60
+        
+        let metersPerUnit = useMiles ? 1609.34 : 1000.0
+        let secondsPerUnit = metersPerUnit / currentSpeed
+        let minutes = Int(secondsPerUnit / 60)
+        let seconds = Int(secondsPerUnit.truncatingRemainder(dividingBy: 60))
+        
         return String(format: "%d:%02d", minutes, seconds)
     }
 }
