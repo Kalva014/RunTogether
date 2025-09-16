@@ -46,6 +46,11 @@ struct HomeView: View {
                .pickerStyle(.segmented)
                .padding()
                .frame(width: 300)
+               .onChange(of: useMiles) { _, newValue in
+                   if let first = distanceOptions.first {
+                       selectedDistance = first
+                   }
+               }
 
                // Distance Picker
                HStack {
