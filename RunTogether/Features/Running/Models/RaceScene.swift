@@ -225,7 +225,7 @@ class RaceScene: BaseRunningScene {
     }
     
     private func setupFinishLine() {
-        let finishLineNode = SKSpriteNode(imageNamed: "FinishLineBanner")
+        let finishLineNode = SKSpriteNode(imageNamed: "FinishLineBannerRed")
         finishLineNode.position = CGPoint(x: 0, y: 0)
         finishLineNode.zPosition = 5
         finishLineNode.setScale(0.1)
@@ -422,7 +422,7 @@ class RaceScene: BaseRunningScene {
     
     private func updateFinishLine() {
         if finishLine == nil {
-            let finishLineNode = SKSpriteNode(imageNamed: "FinishLineBanner")
+            let finishLineNode = SKSpriteNode(imageNamed: "FinishLineBannerRed")
             
             finishLineNode.position = CGPoint(x: 0, y: -frame.height/4)
             
