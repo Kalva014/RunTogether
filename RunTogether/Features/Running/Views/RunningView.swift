@@ -284,6 +284,6 @@ struct RunningView: View {
 }
 
 #Preview {
-    RunningView(mode: "Race", isTreadmillMode: true, distance: "1 Mile", useMiles: true)
+    RunningView(mode: "Casual", isTreadmillMode: true, distance: "1 Mile", useMiles: true)
         .environmentObject(AppEnvironment())
 }
