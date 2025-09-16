@@ -259,7 +259,7 @@ class RaceScene: BaseRunningScene {
         if isTreadmillMode {
             paceString = calculatePace(from: CGFloat(speedMps), useMiles: useMiles)
         } else {
-            paceString = locationManager?.paceString()
+            paceString = locationManager?.paceString(useMiles: useMiles)
         }
         
         updateLeaderboard(pace: paceString)

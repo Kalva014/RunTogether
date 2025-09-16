@@ -49,74 +49,6 @@ struct RunningView: View {
     }
 
     // MARK: - Subviews
-
-//    private func playerStatsView() -> some View {
-//        VStack {
-//            HStack {
-//                Spacer()
-//                VStack(alignment: .trailing, spacing: 8) {
-//                    Button(action: {}) {
-//                        Image(systemName: "gearshape")
-//                            .font(.system(size: 36))
-//                            .foregroundColor(.white)
-//                    }
-//
-//                    VStack(alignment: .trailing, spacing: 8) {
-//                        if useMiles == false {
-//                            Text("Pace: \(viewModel.playerPace) min/km")
-//                                .font(.footnote)
-//                                .foregroundColor(.yellow)
-//                                .bold()
-//                            
-//                            Text("Distance: \(viewModel.playerDistance) m")
-//                                .font(.caption)
-//                                .foregroundColor(.white)
-//                        } else {
-//                            Text("Pace: \(viewModel.playerPace) min/mi")
-//                                .font(.footnote)
-//                                .foregroundColor(.yellow)
-//                                .bold()
-//                            
-//                            Text("Distance: \(viewModel.playerDistance) mi")
-//                                .font(.caption)
-//                                .foregroundColor(.white)
-//                        }
-//
-//                        Text(viewModel.playerProgress)
-//                            .font(.caption)
-//                            .foregroundColor(.white)
-//                        
-//                        // Live heartbeat
-//                        HStack {
-//                            Text("\(viewModel.playerHeartbeat) BPM")
-//                                .font(.caption)
-//                                .foregroundColor(.white)
-//                            
-//                            Image(systemName: "heart.fill")
-//                                .font(.footnote)
-//                                .foregroundColor(.red)
-//                                .scaleEffect(isHeartPulsing ? 1.2 : 1.0)
-//                                .onAppear {
-//                                    withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
-//                                        isHeartPulsing = true
-//                                    }
-//                                }
-//                        }
-//                    }
-//                    .padding(8)
-//                    .background(
-//                        RoundedRectangle(cornerRadius: 10)
-//                            .stroke(Color.white.opacity(0.4), lineWidth: 2)
-//                            .background(Color.black.opacity(0.2))
-//                    )
-//                    .cornerRadius(10)
-//                }
-//                .padding(.top, 40)
-//                .padding(.trailing, 16)
-//            }
-//            Spacer()
-//        }
-//    }
     private func playerStatsView() -> some View {
         VStack {
             HStack {
@@ -352,6 +284,6 @@ struct RunningView: View {
 }
 
 #Preview {
-    RunningView(mode: "Casual", isTreadmillMode: false, distance: "26.2 Miles", useMiles: true)
+    RunningView(mode: "Race", isTreadmillMode: true, distance: "1 Mile", useMiles: true)
         .environmentObject(AppEnvironment())
 }
