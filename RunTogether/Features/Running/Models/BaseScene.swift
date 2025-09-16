@@ -171,18 +171,56 @@ class BaseRunningScene: SKScene, ObservableObject {
     }
     
     func runAnimation(speedMultiplier: CGFloat = 1.0) -> SKAction {
+        // 1. Load textures from your asset catalog
+        let standFrame = SKTexture(imageNamed: "MaleRunnerStanding")
+        let runFrame = SKTexture(imageNamed: "MaleRunner")
+        let sprintingFrame = SKTexture(imageNamed: "MaleRunerSprinting")
+
+        // 2. Create the necessary actions
         let flipRight = SKAction.scaleX(to: 1, duration: 0)
         let flipLeft = SKAction.scaleX(to: -1, duration: 0)
 
-        let frameDuration = max(0.05, 0.25 / speedMultiplier) // cap speed
+        let frameDuration = max(0.05, 0.25 / speedMultiplier)
         let delay = SKAction.wait(forDuration: frameDuration)
 
+        // 3. Create actions to change the sprite's texture
+        let setRunFrame = SKAction.setTexture(runFrame)
+        let setStandFrame = SKAction.setTexture(standFrame)
+        let setSprintFrame = SKAction.setTexture(sprintingFrame)
+
+        // 4. Combine all the actions into a sequence
         let runSequence = SKAction.sequence([
+            // Run frame facing left
             flipLeft,
+//            setRunFrame,
+//            delay,
+//            
+            setSprintFrame,
             delay,
+            
+//            setRunFrame,
+//            delay,
+//            
+//            // Stand frame
+//            setStandFrame,
+//            delay,
+
+            // Run frame facing right
             flipRight,
-            delay
+//            setRunFrame,
+//            delay,
+//            
+            setSprintFrame,
+            delay,
+            
+//            setRunFrame,
+//            delay,
+//
+//            // Stand frame again
+//            setStandFrame,
+//            delay
         ])
+
         return .repeatForever(runSequence)
     }
     
