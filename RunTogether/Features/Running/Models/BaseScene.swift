@@ -133,7 +133,8 @@ class BaseRunningScene: SKScene, ObservableObject {
     
     private func setupFinishLine() {
         let finishLineNode = SKSpriteNode(imageNamed: "FinishLineBannerRed")
-        finishLineNode.position = CGPoint(x: 0, y: 0)
+        finishLineNode.anchorPoint = CGPoint(x: 0.5, y: 0)
+        finishLineNode.position = CGPoint(x: 0, y: -frame.height / 4)
         finishLineNode.zPosition = 5
         finishLineNode.setScale(0.1)
         addChild(finishLineNode)
@@ -378,36 +379,34 @@ class BaseRunningScene: SKScene, ObservableObject {
     }
     
     private func updateFinishLine() {
-        if finishLine == nil {
-            let finishLineNode = SKSpriteNode(imageNamed: "FinishLineBannerRed")
-            finishLineNode.position = CGPoint(x: 0, y: -frame.height/4)
-            finishLineNode.zPosition = 5
-            finishLineNode.setScale(0.1)
-            addChild(finishLineNode)
-            finishLine = finishLineNode
-        }
+        guard let finishLine = finishLine else { return }
+        finishLine.anchorPoint = CGPoint(x: 0.5, y: 0)
 
-        if let finishLine = finishLine {
-            let progress = min(playerDistance / raceDistance, 1.0)
-            finishLine.position.y = -frame.height/4 + progress
-            finishLine.setScale(0.1 + 1.0 * progress)
-            
-            if playerDistance < raceDistance {
-                finishLine.zPosition = 5
-                playerRunner.zPosition = 10
-            } else {
-                finishLine.zPosition = 10
-                playerRunner.zPosition = 9
-            }
-            
-            // Make sure the other runner is behind the player runner
-            for i in 0..<otherRunners.count {
-                if otherRunnersCurrentDistances[i] < raceDistance {
-                    otherRunners[i].zPosition = 9
-                } else {
-                    otherRunners[i].zPosition = 8
-                }
-            }
+        // Calculate progress (0 = start, 1 = finish)
+        let progress = min(playerDistance / raceDistance, 1.0)
+
+        // Scale between min and max
+        let minScale: CGFloat = 0.1
+        let maxScale: CGFloat = 1.15 // ADJUST NUMBER TO SCALE FINISH LINE SIZE AS IT GROWS
+        let targetScale = minScale + (maxScale - minScale) * progress
+
+        // Move finish line down slightly as it grows
+        let startY = -frame.height / 4
+        let endY = startY - 75 * progress // Adjust the "50" to control downward shift
+        let targetY = startY + (endY - startY)
+
+        // Create actions
+        let scaleAction = SKAction.scale(to: targetScale, duration: 0.05)
+        let moveAction = SKAction.moveTo(y: targetY, duration: 0.05)
+        let groupAction = SKAction.group([scaleAction, moveAction])
+
+        finishLine.run(groupAction)
+
+        // Z-order
+        finishLine.zPosition = progress < 1.0 ? 5 : 10
+        playerRunner.zPosition = 10
+        for i in 0..<otherRunners.count {
+            otherRunners[i].zPosition = otherRunnersCurrentDistances[i] < raceDistance ? 9 : 8
         }
     }
     
