@@ -35,7 +35,7 @@ class BaseRunningScene: SKScene, ObservableObject {
     var startTime: TimeInterval?
     var finishTimes: [Int: TimeInterval] = [:] // -1 = player, 0..N-1 = opponents
     var lastUpdateTime: TimeInterval = 0
-    var isRaceOver = false
+    @Published var isRaceOver = false
     
     // MARK: - Opponent State
     var otherRunnersCurrentDistances: [CGFloat] = [50, 120] // starting distances

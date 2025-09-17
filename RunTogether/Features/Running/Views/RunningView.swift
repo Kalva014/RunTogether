@@ -15,6 +15,8 @@ struct RunningView: View {
     
     @StateObject private var viewModel: RunningViewModel
     @State private var isHeartPulsing = false
+    @State private var navigateToResults = false
+    @Environment(\.dismiss) private var dismiss
     
     init(mode: String, isTreadmillMode: Bool, distance: String, useMiles: Bool) {
         self.mode = mode
@@ -36,6 +38,26 @@ struct RunningView: View {
             if isTreadmillMode {
                 treadmillControlsView()
             }
+
+            // Results button overlay when race is over
+            if viewModel.raceScene.isRaceOver {
+                VStack {
+                    Spacer()
+                    Button(action: { navigateToResults = true }) {
+                        Text("View Results")
+                            .font(.headline)
+                            .foregroundColor(.black)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 20)
+                            .background(Color.yellow)
+                            .cornerRadius(12)
+                            .shadow(radius: 4)
+                    }
+                    .padding(.bottom, 40)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.spring(), value: viewModel.raceScene.isRaceOver)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ignoresSafeArea()
@@ -46,6 +68,25 @@ struct RunningView: View {
             )
             viewModel.raceScene.scaleMode = .fill
         }
+        .background(
+            NavigationLink(isActive: $navigateToResults) {
+                RaceResultsView(
+                    leaderboard: viewModel.leaderboard,
+                    playerTime: viewModel.raceScene.finishTimes[-1],
+                    distance: viewModel.playerProgressDetail,
+                    stats: RaceStats(
+                        playerName: "Ken",
+                        playerTime: viewModel.raceScene.finishTimes[-1],
+                        playerPlace: (viewModel.leaderboard.firstIndex(where: { $0.name == "Ken" }) ?? 0) + 1,
+                        totalRunners: viewModel.leaderboard.count,
+                        raceDistanceMeters: Double(viewModel.raceScene.raceDistance),
+                        useMiles: useMiles
+                    ),
+                    onExitToHome: { dismiss() }
+                )
+            } label: { EmptyView() }
+                .hidden()
+        )
     }
 
     // MARK: - Subviews
