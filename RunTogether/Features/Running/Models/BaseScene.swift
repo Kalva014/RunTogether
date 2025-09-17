@@ -40,6 +40,7 @@ class BaseRunningScene: SKScene, ObservableObject {
     // MARK: - Opponent State
     var otherRunnersCurrentDistances: [CGFloat] = [50, 120] // starting distances
     var otherRunnersSpeeds: [CGFloat] = [2.8, 3.5]
+    var otherRunnersNames: [String] = []
     var previousOpponentSpeeds: [CGFloat] = []
     var previousPlayerSpeedMultiplier: CGFloat = 0.0
     
@@ -106,11 +107,13 @@ class BaseRunningScene: SKScene, ObservableObject {
     
     private func setupOpponentRunners() {
         let opponent1 = createRunner(name: "Bre", nationality: "CanadaFlag")
+        otherRunnersNames.append("Bre")
         opponent1.position = CGPoint(x: -100, y: 100)
         addChild(opponent1)
         otherRunners.append(opponent1)
         
         let opponent2 = createRunner(name: "John", nationality: "JapanFlag")
+        otherRunnersNames.append("John")
         opponent2.position = CGPoint(x: 100, y: 200)
         addChild(opponent2)
         otherRunners.append(opponent2)
@@ -172,8 +175,8 @@ class BaseRunningScene: SKScene, ObservableObject {
     
     func runAnimation(speedMultiplier: CGFloat = 1.0) -> SKAction {
         // 1. Load textures from your asset catalog
-        let standFrame = SKTexture(imageNamed: "MaleRunnerStanding")
-        let runFrame = SKTexture(imageNamed: "MaleRunner")
+//        let standFrame = SKTexture(imageNamed: "MaleRunnerStanding")
+//        let runFrame = SKTexture(imageNamed: "MaleRunner")
         let sprintingFrame = SKTexture(imageNamed: "MaleRunerSprinting")
 
         // 2. Create the necessary actions
@@ -184,8 +187,8 @@ class BaseRunningScene: SKScene, ObservableObject {
         let delay = SKAction.wait(forDuration: frameDuration)
 
         // 3. Create actions to change the sprite's texture
-        let setRunFrame = SKAction.setTexture(runFrame)
-        let setStandFrame = SKAction.setTexture(standFrame)
+//        let setRunFrame = SKAction.setTexture(runFrame)
+//        let setStandFrame = SKAction.setTexture(standFrame)
         let setSprintFrame = SKAction.setTexture(sprintingFrame)
 
         // 4. Combine all the actions into a sequence
@@ -396,6 +399,15 @@ class BaseRunningScene: SKScene, ObservableObject {
                 finishLine.zPosition = 10
                 playerRunner.zPosition = 9
             }
+            
+            // Make sure the other runner is behind the player runner
+            for i in 0..<otherRunners.count {
+                if otherRunnersCurrentDistances[i] < raceDistance {
+                    otherRunners[i].zPosition = 9
+                } else {
+                    otherRunners[i].zPosition = 8
+                }
+            }
         }
     }
     
@@ -471,7 +483,7 @@ class BaseRunningScene: SKScene, ObservableObject {
 
         for i in 0..<otherRunners.count {
             currRunners.append(RunnerData(
-                name: "Opponent \(i+1)",
+                name: otherRunnersNames[i],
                 distance: otherRunnersCurrentDistances[i],
                 pace: calculatePace(from: otherRunnersSpeeds[i], useMiles: useMiles),
                 finishTime: finishTimes[i]

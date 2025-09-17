@@ -33,7 +33,7 @@ class CasualScene: BaseRunningScene {
 
         for i in 0..<otherRunners.count {
             currRunners.append(RunnerData(
-                name: "Opponent \(i+1)",
+                name: otherRunnersNames[i],
                 distance: otherRunnersCurrentDistances[i],
                 pace: calculatePace(from: otherRunnersSpeeds[i], useMiles: useMiles),
                 finishTime: finishTimes[i]
