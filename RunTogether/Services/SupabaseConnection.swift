@@ -38,15 +38,18 @@ class SupabaseConnection: ObservableObject {
     func createProfile(username: String, first_name: String, last_name: String, location: String) async throws {
         guard let userId = self.currentUserId else { return }
         
+        let newRowData = Profile(
+            id: userId,
+            created_at: nil,
+            username: username,
+            first_name: first_name,
+            last_name: last_name,
+            location: location
+        )
+        
         try await self.client
             .from("profiles")
-            .insert([
-                "id": userId.uuidString,
-                "username": username,
-                "first_name": first_name,
-                "last_name": last_name,
-                "location": location
-            ])
+            .insert(newRowData)
             .execute()
     }
     
@@ -97,6 +100,7 @@ class SupabaseConnection: ObservableObject {
                           userInfo: [NSLocalizedDescriptionKey: "User not signed in"])
         }
         
+        // Create race
         let brandNewRace = Race(
             id: nil,
             name: name,
@@ -112,6 +116,7 @@ class SupabaseConnection: ObservableObject {
             .execute()
             .value
         
+        // Add user as participant
         let participant = RaceParticipants(
             id: newRace.id!,
             created_at: Date(),
@@ -197,7 +202,7 @@ class SupabaseConnection: ObservableObject {
         guard let userId = self.currentUserId else { return }
         
         let update = RaceUpdates(
-            id: UUID(),
+            id: nil,
             created_at: Date(),
             race_id: raceId,
             user_id: userId,
@@ -272,13 +277,15 @@ class SupabaseConnection: ObservableObject {
     }
     
     func markParticipantDisconnected(raceId: UUID, userId: UUID) async throws {
+        let rowData: [String: AnyJSON] = [
+            "finish_time": "N/A", // THIS IS SUPPOSED TO BE A STRING BUT IT IS TRIPPING
+            "distance_covered": 0.0,
+            "average_pace": 0.0
+        ]
+        
         _ = try await client
             .from("Race_Participants")
-            .update([
-                "finish_time": -1, // THIS IS SUPPOSED TO BE A STRING BUT IT IS TRIPPING
-                "distance_covered": 0.0,
-                "average_pace": 0.0
-            ])
+            .update(rowData)
             .eq("race_id", value: raceId.uuidString)
             .eq("user_id", value: userId.uuidString)
             .execute()
@@ -289,16 +296,20 @@ class SupabaseConnection: ObservableObject {
     
     func markParticipantFinished(raceId: UUID, distance: Double, pace: Double, finishPlace: Int) async throws {
         guard let userId = self.currentUserId else { return }
+        
+        // Correctly wrap each value in its AnyJSON enum case
+       let rowData: [String: AnyJSON] = [
+           "finish_time": AnyJSON.string(Date().ISO8601Format()), // Convert Date to ISO 8601 string
+           "distance_covered": AnyJSON.double(distance), // Use AnyJSON.double
+           "average_pace": AnyJSON.double(pace),       // Use AnyJSON.double
+           "place": AnyJSON.integer(finishPlace)            // Use AnyJSON.int
+       ]
+
 
         // 1️⃣ Update participant as finished in Race_Participants
         _ = try await client
             .from("Race_Participants")
-            .update([
-                "finish_time": ISO8601DateFormatter().string(from: Date()), // SOMETHING IS UP HERE
-                "distance_covered": distance,
-                "average_pace": pace,
-                "place": Double(finishPlace)
-            ])
+            .update(rowData)
             .eq("race_id", value: raceId.uuidString)
             .eq("user_id", value: userId.uuidString)
             .execute()
@@ -551,12 +562,12 @@ class SupabaseConnection: ObservableObject {
     /// Send a chat message
     func sendMessage(raceId: UUID, userId: UUID, username: String?, message: String) async throws {
         let chat = RaceChatMessage(
-            id: UUID(),
+            id: nil,
             race_id: raceId,
             user_id: userId,
             username: username,
             message: message,
-            created_at: Date()
+            created_at: nil
         )
         
         _ = try await client
@@ -678,15 +689,18 @@ class SupabaseConnection: ObservableObject {
                 .execute()
             
         } else {
+            let rowData = GlobalLeaderboardEntry(
+                id: nil,
+                user_id: userId,
+                total_races_completed: 1,
+                total_distance_covered: distance,
+                top_three_finishes: finishedInTopThree ? 1 : 0
+            )
+            
             // Insert new entry
             _ = try await client
                 .from("Global_Leaderboard")
-                .insert([
-                    "user_id": userId.uuidString,
-                    "total_races_completed": 1,
-                    "total_distance_covered": distance,
-                    "top_three_finishes": finishedInTopThree ? 1 : 0
-                ])
+                .insert(rowData)
                 .execute()
         }
     }

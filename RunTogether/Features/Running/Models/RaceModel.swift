@@ -25,7 +25,7 @@ struct RaceParticipants: Codable, Identifiable {
 }
 
 struct RaceUpdates: Codable, Identifiable {
-    let id: UUID
+    let id: UUID?
     let created_at: Date
     let race_id: UUID
     let user_id: UUID
