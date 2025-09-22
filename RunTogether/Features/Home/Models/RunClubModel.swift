@@ -5,6 +5,8 @@
 //  Created by Kenneth Alvarez on 9/21/25.
 //
 
+import Foundation
+
 struct RunClub: Codable, Identifiable {
     let id: Int?
     let created_at: Date

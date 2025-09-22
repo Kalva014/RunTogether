@@ -52,11 +52,11 @@ struct HomeView: View {
                    }
                }
                 
-                Button("Testing") {
-                    Task{
-                        await viewModel.testSupabase()
-                    }
-                }
+//                Button("Testing") {
+//                    Task{
+//                        await viewModel.testSupabase()
+//                    }
+//                }
 
                // Distance Picker
                HStack {
