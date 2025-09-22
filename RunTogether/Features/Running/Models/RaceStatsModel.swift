@@ -15,5 +15,3 @@ struct RaceStats {
     let raceDistanceMeters: Double
     let useMiles: Bool
 }
-
-

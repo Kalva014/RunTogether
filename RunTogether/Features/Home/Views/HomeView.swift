@@ -51,6 +51,12 @@ struct HomeView: View {
                        selectedDistance = first
                    }
                }
+                
+                Button("Testing") {
+                    Task{
+                        await viewModel.testSupabase()
+                    }
+                }
 
                // Distance Picker
                HStack {

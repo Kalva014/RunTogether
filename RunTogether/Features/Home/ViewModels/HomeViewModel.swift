@@ -9,6 +9,10 @@ class HomeViewModel: ObservableObject {
     init(appEnvironment: AppEnvironment) {
         self.appEnvironment = appEnvironment
     }
+    
+//    func testSupabase() async {
+//        supabaseConnection.joinRandomRace(mode: "Race")
+//    }
 
     func signOut() async {
         do {
