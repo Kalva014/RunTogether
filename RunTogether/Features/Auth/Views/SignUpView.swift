@@ -12,6 +12,9 @@ struct SignUpView: View {
     @StateObject var viewModel: SignUpViewModel
     @State private var email: String = ""
     @State private var username: String = ""
+    @State private var first_name: String = ""
+    @State private var last_name: String = ""
+    @State private var phone: String = ""
     @State private var password: String = ""
     @State var isSignedUp: Bool = false
     
@@ -25,11 +28,13 @@ struct SignUpView: View {
             
             TextField("Email", text: $email)
             TextField("Username", text: $username)
+            TextField("first_name", text: $first_name)
+            TextField("last_name", text: $last_name)
             SecureField("Password", text:  $password)
             
             Button("Sign Up") {
                 Task {
-                    await viewModel.signUp(email: email, username: username, password: password)
+                    isSignedUp = await viewModel.signUp(email: email, username: username, first_name: first_name, last_name: last_name, password: password)
                 }
             }
             

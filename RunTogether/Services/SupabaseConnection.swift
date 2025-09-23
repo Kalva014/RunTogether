@@ -35,7 +35,7 @@ class SupabaseConnection: ObservableObject {
     }
     
     // MARK: - Profile Management
-    func createProfile(username: String, first_name: String, last_name: String, location: String) async throws {
+    func createProfile(username: String, first_name: String, last_name: String, location: String?) async throws {
         guard let userId = self.currentUserId else { return }
         
         let newRowData = Profile(
@@ -47,8 +47,8 @@ class SupabaseConnection: ObservableObject {
             location: location
         )
         
-        try await self.client
-            .from("profiles")
+        let res = try await self.client
+            .from("Profiles")
             .insert(newRowData)
             .execute()
     }
@@ -65,7 +65,7 @@ class SupabaseConnection: ObservableObject {
         guard !updatesDict.isEmpty else { return }
         
         try await self.client
-            .from("profiles")
+            .from("Profiles")
             .update(updatesDict)
             .eq("id", value: userId.uuidString)
             .execute()

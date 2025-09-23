@@ -2,103 +2,38 @@ import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject var appEnvironment: AppEnvironment
-    @StateObject private var viewModel: HomeViewModel
-    @Environment(\.dismiss) var dismiss
-    @State var isSignedOut: Bool = false
-    @State private var isTreadmillMode: Bool = false
-    @State private var selectedDistance: String = "5K" // Default 5k
-    @State private var useMiles: Bool = false
-    
-    var distanceOptions: [String] {
-        if useMiles {
-            return ["1 Mile", "3.1 Miles", "6.2 Miles", "13.1 Miles", "26.2 Miles"]
-        } else {
-            return ["5K", "10K", "Half Marathon(21.1K)", "Full Marathon(42.2K)"]
-        }
-    }
-
-
-    init() {
-        _viewModel = StateObject(wrappedValue: HomeViewModel(appEnvironment: AppEnvironment()))
-    }
+//    @StateObject private var viewModel: RunTabViewModel
+//    
+//    init() {
+//        _viewModel = StateObject(wrappedValue: RunTabViewModel(appEnvironment: AppEnvironment()))
+//    }
 
     var body: some View {
-        NavigationStack {
-            VStack {
-                if let appUser = appEnvironment.appUser {
-                    Text("Welcome, \(appUser.username)!")
-                        .font(.largeTitle)
-                        .padding()
-                    Text("Email: \(appUser.email)")
-                        .font(.headline)
-                        .padding(.bottom)
-                } else {
-                    Text("Welcome!")
-                        .font(.largeTitle)
-                        .padding()
+        TabView {
+            RunTabView()
+                .tabItem {
+                    Image(systemName: "figure.run")
+                    Text("Run")
                 }
-                
-                // Unit Picker
-               Picker("Units", selection: $useMiles) {
-                   Text("Kilometers").tag(false)
-                   Text("Miles").tag(true)
-               }
-               .pickerStyle(.segmented)
-               .padding()
-               .frame(width: 300)
-               .onChange(of: useMiles) { _, newValue in
-                   if let first = distanceOptions.first {
-                       selectedDistance = first
-                   }
-               }
-                
-//                Button("Testing") {
-//                    Task{
-//                        await viewModel.testSupabase()
-//                    }
-//                }
-
-               // Distance Picker
-               HStack {
-                   Text("Distance")
-                       .font(.headline)
-                       .padding()
-                   Picker("Distance", selection: $selectedDistance) {
-                       ForEach(distanceOptions, id: \.self) { distance in
-                           Text(distance)
-                       }
-                   }
-                   .pickerStyle(.menu)
-                   .padding()
-               }
-
-               Toggle("Treadmill Mode", isOn: $isTreadmillMode)
-                   .font(.headline)
-                   .padding()
-                   .frame(width: 250)
-               
-               NavigationLink(destination: RunningView(
-                   mode: "Race",
-                   isTreadmillMode: isTreadmillMode,
-                   distance: selectedDistance,
-                   useMiles: useMiles
-               )) {
-                   Text("Race")
-               }.buttonStyle(.borderedProminent)
-               
-               NavigationLink(destination: RunningView(
-                   mode: "Casual",
-                   isTreadmillMode: false,
-                   distance: selectedDistance,
-                   useMiles: useMiles
-               )) {
-                   Text("Casual Group Run")
-               }.buttonStyle(.borderedProminent)
-           }
-            .padding()
-            .cornerRadius(10)
+            
+            GroupTabView()
+                .tabItem {
+                    Image(systemName: "person.3.fill")
+                    Text("Groups")
+                }
+            
+            LeaderboardTabView()
+                .tabItem {
+                    Image(systemName: "trophy.fill")
+                    Text("Leaderboards")
+                }
+            
+            ProfileTabView()
+                .tabItem {
+                    Image(systemName: "person.crop.circle.fill")
+                    Text("Profile")
+                }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 

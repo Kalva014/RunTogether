@@ -20,5 +20,5 @@ struct Profile: Codable, Identifiable {
     var username: String
     var first_name: String
     var last_name: String
-    var location: String
+    var location: String?
 }

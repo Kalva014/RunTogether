@@ -2,7 +2,7 @@ import Foundation
 import Supabase
 import SwiftUI
 
-class HomeViewModel: ObservableObject {
+class RunTabViewModel: ObservableObject {
     var appEnvironment: AppEnvironment
     private lazy var supabaseConnection = SupabaseConnection()
 
