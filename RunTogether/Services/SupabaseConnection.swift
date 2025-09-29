@@ -51,6 +51,8 @@ class SupabaseConnection: ObservableObject {
             .from("Profiles")
             .insert(newRowData)
             .execute()
+        
+        print("Profile was created with the following status code: \(res.status)")
     }
     
     func updateProfile(username: String? = nil, firstName: String? = nil, lastName: String? = nil, location: String? = nil) async throws {

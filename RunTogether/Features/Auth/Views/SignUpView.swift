@@ -19,7 +19,7 @@ struct SignUpView: View {
     @State var isSignedUp: Bool = false
     
     init() {
-        _viewModel = StateObject(wrappedValue: SignUpViewModel(appEnvironment: AppEnvironment()))
+        _viewModel = StateObject(wrappedValue: SignUpViewModel())
     }
     
     var body: some View {
@@ -34,7 +34,7 @@ struct SignUpView: View {
             
             Button("Sign Up") {
                 Task {
-                    isSignedUp = await viewModel.signUp(email: email, username: username, first_name: first_name, last_name: last_name, password: password)
+                    isSignedUp = await viewModel.signUp(email: email, username: username, first_name: first_name, last_name: last_name, password: password, appEnvironment: appEnvironment)
                 }
             }
             

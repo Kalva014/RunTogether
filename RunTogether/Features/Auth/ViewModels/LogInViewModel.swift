@@ -6,15 +6,9 @@ class LogInViewModel: ObservableObject {
     @Published var email = ""
     @Published var password = ""
     @Published var errorMessage: String?
-    var appEnvironment: AppEnvironment
-
     private lazy var supabaseConnection = SupabaseConnection()
 
-    init(appEnvironment: AppEnvironment) {
-        self.appEnvironment = appEnvironment
-    }
-
-    func signIn(email: String, password: String) async -> Bool {
+    func signIn(email: String, password: String, appEnvironment: AppEnvironment) async -> Bool {
         do {
             _ = try await supabaseConnection.signIn(email: email, password: password)
             
@@ -28,6 +22,7 @@ class LogInViewModel: ObservableObject {
                 username = usernameString
             }
             
+            // Assign to environment so user info can be passed to other views
             appEnvironment.appUser = AppUser(id: user.id.uuidString, email: user.email ?? "", username: username)
             
             return true

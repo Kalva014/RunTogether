@@ -10,6 +10,11 @@ struct ProfileTabView: View {
     var body: some View {
         VStack {
             Button("Edit Profile") {}
+            Button("Sign Out") {
+                Task {
+                    
+                }
+            }
             Text("Profile")
             Text("First Name")
             Text("Last Name")

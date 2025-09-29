@@ -15,7 +15,7 @@ struct LogInView: View {
     @State var isLoggedIn: Bool = false
 
     init() {
-        _viewModel = StateObject(wrappedValue: LogInViewModel(appEnvironment: AppEnvironment()))
+        _viewModel = StateObject(wrappedValue: LogInViewModel())
     }
 
     var body: some View {
@@ -27,7 +27,7 @@ struct LogInView: View {
             
             Button("Log In") {
                 Task {
-                    isLoggedIn = await viewModel.signIn(email: email, password: password)
+                    isLoggedIn = await viewModel.signIn(email: email, password: password, appEnvironment: appEnvironment)
                 }
             }
             
