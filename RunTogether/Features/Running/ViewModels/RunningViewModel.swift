@@ -10,6 +10,7 @@ import CoreLocation
 import SpriteKit
 import Combine
 
+@MainActor
 class RunningViewModel: ObservableObject {
     @Published var locationManager: LocationManager?
     @Published var raceScene: BaseRunningScene

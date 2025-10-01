@@ -9,7 +9,14 @@ import SwiftUI
 
 @main
 struct RunTogetherApp: App {
-    @StateObject var appEnvironment = AppEnvironment()
+    @StateObject var supabaseConnection = SupabaseConnection()
+    @StateObject var appEnvironment: AppEnvironment
+
+    init() {
+        let supabaseConnection = SupabaseConnection()
+        self._supabaseConnection = StateObject(wrappedValue: supabaseConnection)
+        self._appEnvironment = StateObject(wrappedValue: AppEnvironment(supabaseConnection: supabaseConnection))
+    }
 
     var body: some Scene {
         WindowGroup {

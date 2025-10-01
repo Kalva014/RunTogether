@@ -325,6 +325,8 @@ struct RunningView: View {
 }
 
 #Preview {
+    let supabaseConnection = SupabaseConnection()
+
     RunningView(mode: "Casual", isTreadmillMode: true, distance: "1 Mile", useMiles: true)
-        .environmentObject(AppEnvironment())
+        .environmentObject(AppEnvironment(appUser: AppUser(id: UUID().uuidString, email: "test@example.com", username: "testuser"), supabaseConnection: supabaseConnection))
 }

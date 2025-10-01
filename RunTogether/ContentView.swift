@@ -19,12 +19,14 @@ struct ContentView: View {
                 VStack {
                     NavigationLink {
                         SignUpView()
+                            .environmentObject(appEnvironment)
                     } label: {
                         Text("Sign Up!")
                     }
                     
                     NavigationLink {
                         LogInView()
+                            .environmentObject(appEnvironment)
                     } label: {
                         Text("Log In!")
                     }
@@ -38,6 +40,7 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
-        .environmentObject(AppEnvironment())
+    let supabaseConnection = SupabaseConnection()
+    return ContentView()
+        .environmentObject(AppEnvironment(supabaseConnection: supabaseConnection))
 }

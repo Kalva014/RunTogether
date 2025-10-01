@@ -9,12 +9,14 @@ import Supabase
 import SwiftUI
 
 /// Connects to DB for authentication and multiplayer
+@MainActor
 class SupabaseConnection: ObservableObject {
     // MARK: - Initialization
     let client: SupabaseClient
     
     @Published var currentUserId: UUID?
     @Published var currentChannel: RealtimeChannelV2?
+    @Published var isAuthenticated: Bool = false
     
     init() {
         guard let supabaseURLString = Bundle.main.infoDictionary?["Supabase URL"] as? String,
@@ -31,8 +33,29 @@ class SupabaseConnection: ObservableObject {
             )
         )
         
-        self.currentUserId = self.client.auth.currentUser?.id
+        // Check for existing session on initialization
+        Task {
+            await checkAuthenticationState()
+        }
     }
+    
+    // MARK: - Authentication State Management
+    func checkAuthenticationState() async {
+        do {
+            let session = try await client.auth.session
+            // session.user is non-optional, so access it directly.
+            let user = session.user
+            self.currentUserId = user.id
+            self.isAuthenticated = true
+            print("User session restored: \(user.email ?? "unknown")")
+        } catch {
+            // No valid session found.
+            self.currentUserId = nil
+            self.isAuthenticated = false
+            print("No valid session found")
+        }
+    }
+
     
     // MARK: - Profile Management
     func createProfile(username: String, first_name: String, last_name: String, location: String?) async throws {
@@ -81,18 +104,21 @@ class SupabaseConnection: ObservableObject {
             data: ["username": AnyJSON(username)]
         )
         self.currentUserId = response.user.id
+        self.isAuthenticated = true
         return response.user
     }
     
     func signIn(email: String, password: String) async throws -> User {
         let response = try await self.client.auth.signIn(email: email, password: password)
         self.currentUserId = response.user.id
+        self.isAuthenticated = true
         return response.user
     }
     
     func signOut() async throws {
         try await self.client.auth.signOut()
         self.currentUserId = nil
+        self.isAuthenticated = false
     }
     
     // MARK: - Multiplayer Methods

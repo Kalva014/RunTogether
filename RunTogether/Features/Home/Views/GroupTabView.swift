@@ -25,5 +25,5 @@ struct GroupTabView: View {
 
 #Preview {
     GroupTabView()
-        .environmentObject(AppEnvironment(appUser: AppUser(id: UUID().uuidString, email: "test@example.com", username: "testuser")))
+        .environmentObject(AppEnvironment(appUser: AppUser(id: UUID().uuidString, email: "test@example.com", username: "testuser"), supabaseConnection: SupabaseConnection()))
 }

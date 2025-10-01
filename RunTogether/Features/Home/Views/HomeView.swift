@@ -4,8 +4,6 @@ struct HomeView: View {
     @EnvironmentObject var appEnvironment: AppEnvironment
 
     var body: some View {
-        let _ = print("Testing \($appEnvironment.appUser)")
-
         TabView {
             RunTabView()
                 .tabItem {
@@ -27,7 +25,6 @@ struct HomeView: View {
                     Text("Leaderboards")
                 }
                 .environmentObject(appEnvironment)
-
             
             ProfileTabView()
                 .tabItem {
@@ -40,6 +37,7 @@ struct HomeView: View {
 }
 
 #Preview {
-    HomeView()
-        .environmentObject(AppEnvironment(appUser: AppUser(id: UUID().uuidString, email: "test@example.com", username: "testuser")))
+    let supabaseConnection = SupabaseConnection()
+    return HomeView()
+        .environmentObject(AppEnvironment(appUser: AppUser(id: UUID().uuidString, email: "test@example.com", username: "testuser"), supabaseConnection: supabaseConnection))
 }

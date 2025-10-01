@@ -1,14 +1,16 @@
+//
+//  ProfileTabViewModel.swift
+//  RunTogether
+//
+//  Created by Kenneth Alvarez on 9/29/25.
+//
+
 import Foundation
 import Supabase
 import SwiftUI
 
 @MainActor
-class RunTabViewModel: ObservableObject {
-    
-//    func testSupabase() async {
-//        appEnvironment.supabaseConnection.joinRandomRace(mode: "Race")
-//    }
-
+class ProfileTabViewModel: ObservableObject {
     func signOut(appEnvironment: AppEnvironment) async {
         do {
             try await appEnvironment.supabaseConnection.signOut()

@@ -41,7 +41,8 @@ struct LogInView: View {
 }
 
 #Preview {
-    LogInView()
-        .environmentObject(AppEnvironment())
+    let supabaseConnection = SupabaseConnection()
+    return LogInView()
+        .environmentObject(AppEnvironment(supabaseConnection: supabaseConnection))
 }
 

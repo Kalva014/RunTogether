@@ -49,6 +49,7 @@ struct SignUpView: View {
 }
 
 #Preview {
-    SignUpView()
-        .environmentObject(AppEnvironment())
+    let supabaseConnection = SupabaseConnection()
+    return SignUpView()
+        .environmentObject(AppEnvironment(supabaseConnection: supabaseConnection))
 }

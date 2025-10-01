@@ -2,18 +2,18 @@ import Foundation
 import Supabase
 import SwiftUI
 
+@MainActor
 class LogInViewModel: ObservableObject {
     @Published var email = ""
     @Published var password = ""
     @Published var errorMessage: String?
-    private lazy var supabaseConnection = SupabaseConnection()
 
     func signIn(email: String, password: String, appEnvironment: AppEnvironment) async -> Bool {
         do {
-            _ = try await supabaseConnection.signIn(email: email, password: password)
+            _ = try await appEnvironment.supabaseConnection.signIn(email: email, password: password)
             
             // Assuming successful sign-in, retrieve user data
-            let session = try await supabaseConnection.client.auth.session
+            let session = try await appEnvironment.supabaseConnection.client.auth.session
             
             // user is not optional here, it's directly accessible
             let user = session.user

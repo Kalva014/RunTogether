@@ -26,7 +26,7 @@ struct RunTabView: View {
     
     
     init() {
-        _viewModel = StateObject(wrappedValue: RunTabViewModel(appEnvironment: AppEnvironment()))
+        _viewModel = StateObject(wrappedValue: RunTabViewModel())
     }
     
     var body: some View {
@@ -105,5 +105,5 @@ struct RunTabView: View {
 
 #Preview {
     RunTabView()
-        .environmentObject(AppEnvironment(appUser: AppUser(id: UUID().uuidString, email: "test@example.com", username: "testuser")))
+        .environmentObject(AppEnvironment(appUser: AppUser(id: UUID().uuidString, email: "test@example.com", username: "testuser"), supabaseConnection: SupabaseConnection()))
 }
