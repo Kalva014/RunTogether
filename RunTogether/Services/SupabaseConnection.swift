@@ -517,6 +517,8 @@ class SupabaseConnection: ObservableObject {
             .execute()
 
         print("Run club \(name) created!")
+        
+        try await self.joinRunClub(name: name)
     }
 
     /// Join a run club by name
@@ -601,6 +603,57 @@ class SupabaseConnection: ObservableObject {
         return memberships.map { $0.group_id }
     }
     
+    /// Fetch all run clubs
+    func listRunClubs() async throws -> [RunClub] {
+        let clubs: [RunClub] = try await client
+            .from("Run_Clubs")
+            .select()
+            .execute()
+            .value ?? []
+        
+        return clubs
+    }
+    
+    /// Delete a run club (only if the current user is the owner)
+    func deleteRunClub(name: String) async throws {
+        guard let userId = self.currentUserId else { return }
+
+        // Fetch the run club to check ownership
+        let clubs: [RunClub] = try await client
+            .from("Run_Clubs")
+            .select()
+            .eq("name", value: name)
+            .execute()
+            .value ?? []
+
+        guard let club = clubs.first else {
+            print("Run club \(name) not found")
+            return
+        }
+
+        // Verify current user is the owner
+        guard club.owner == userId else {
+            print("User is not the owner of run club \(name)")
+            return
+        }
+
+        // Optionally delete memberships first (if your schema does not cascade automatically)
+        _ = try await client
+            .from("Run_Club_Members")
+            .delete()
+            .eq("group_id", value: name)
+            .execute()
+
+        // Delete the run club
+        _ = try await client
+            .from("Run_Clubs")
+            .delete()
+            .eq("name", value: name)
+            .execute()
+
+        print("Run club \(name) deleted by owner")
+    }
+
     // MARK: - Live Post Race Chat
     @Published var currentMessages: [RaceChatMessage] = []
     private var chatChannel: RealtimeChannelV2?

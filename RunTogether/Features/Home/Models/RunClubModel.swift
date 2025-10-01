@@ -12,6 +12,7 @@ struct RunClub: Codable, Identifiable {
     let created_at: Date
     let name: String
     let owner: UUID?
+    let description: String?
 }
 
 struct RunClubMember: Codable {
