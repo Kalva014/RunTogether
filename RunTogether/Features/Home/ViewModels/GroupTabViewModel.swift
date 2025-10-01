@@ -92,13 +92,32 @@ class GroupTabViewModel: ObservableObject {
         }
     }
     
-    func searchRunClubs(appEnvironment: AppEnvironment, searchText: String) async {
-        searchTask?.cancel()
+    func deleteRunClub(appEnvironment: AppEnvironment, clubName: String) async throws {
+        defer { isLoading = false }
         
+        do {
+            isLoading = true
+            try await appEnvironment.supabaseConnection.deleteRunClub(name: clubName)
+            // Refresh the list after deletion
+            try await fetchRunClubs(appEnvironment: appEnvironment)
+            if selectedClub?.name == clubName {
+                selectedClub = nil
+                clubMembers = []
+            }
+        } catch {
+            errorMessage = "Failed to delete run club: \(error.localizedDescription)"
+            throw error
+        }
+    }
+    
+    @MainActor
+    func searchRunClubs(appEnvironment: AppEnvironment, searchText: String) async {
         guard !searchText.isEmpty else {
             try? await fetchRunClubs(appEnvironment: appEnvironment)
             return
         }
+        
+        searchTask?.cancel()
         
         searchTask = Task {
             do {
