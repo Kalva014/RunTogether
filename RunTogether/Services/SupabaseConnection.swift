@@ -88,12 +88,30 @@ class SupabaseConnection: ObservableObject {
         if let location = location, !location.isEmpty { updatesDict["location"] = location }
         
         guard !updatesDict.isEmpty else { return }
+                
+        do {
+            try await self.client
+                .from("Profiles")
+                .update(updatesDict)
+                .eq("id", value: userId.uuidString)
+                .execute()
+        }
+        catch {
+            print("error: \(error)")
+        }
+    }
+    
+    func getProfile() async throws -> Profile? {
+        guard let userId = self.currentUserId else { return nil }
         
-        try await self.client
+        let response: PostgrestResponse<Profile> = try await self.client
             .from("Profiles")
-            .update(updatesDict)
+            .select()
             .eq("id", value: userId.uuidString)
+            .single()
             .execute()
+        
+        return response.value
     }
     
     // MARK: - Authentication
