@@ -491,7 +491,7 @@ class SupabaseConnection: ObservableObject {
 
     // MARK: - Run Club Management
     /// Create a new run club
-    func createRunClub(name: String) async throws {
+    func createRunClub(name: String, description: String? = nil) async throws {
         guard let userId = self.currentUserId else { return }
 
         // Check if club already exists
@@ -512,7 +512,8 @@ class SupabaseConnection: ObservableObject {
             .from("Run_Clubs")
             .insert([
                 "name": name,
-                "owner": userId.uuidString
+                "owner": userId.uuidString,
+                "description": description
             ])
             .execute()
 

@@ -23,7 +23,7 @@ class GroupTabViewModel: ObservableObject {
         
         do {
             isLoading = true
-            try await appEnvironment.supabaseConnection.createRunClub(name: name)
+            try await appEnvironment.supabaseConnection.createRunClub(name: name, description: description)
             // Update the local list after creating a new club
             try await fetchRunClubs(appEnvironment: appEnvironment)
         } catch {
