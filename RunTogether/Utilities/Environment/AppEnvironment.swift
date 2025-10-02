@@ -23,7 +23,7 @@ class AppEnvironment: ObservableObject {
         }
         
         // If user is authenticated, set the appUser
-        if supabaseConnection.isAuthenticated, let userId = supabaseConnection.currentUserId {
+        if supabaseConnection.isAuthenticated, let _ = supabaseConnection.currentUserId {
             do {
                 let session = try await supabaseConnection.client.auth.session
                 let user = session.user

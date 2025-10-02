@@ -28,9 +28,9 @@ struct ProfileTabView: View {
     private func loadUserData() async {
         do {
             guard let user = try await appEnvironment.supabaseConnection.getProfile() else { return }
-            username = user.username ?? ""
-            firstName = user.first_name ?? ""
-            lastName = user.last_name ?? ""
+            username = user.username
+            firstName = user.first_name
+            lastName = user.last_name
             location = user.location ?? ""
             originalValues = (username, firstName, lastName, location)
         } catch {

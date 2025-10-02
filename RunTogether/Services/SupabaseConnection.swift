@@ -772,7 +772,7 @@ class SupabaseConnection: ObservableObject {
             .execute()
             .value ?? []
         
-        if var entry = entries.first {
+        if let entry = entries.first {
             // Update existing entry
             let newRaces = (entry.total_races_completed ?? 0) + 1
             let newDistance = (entry.total_distance_covered ?? 0) + distance

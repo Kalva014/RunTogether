@@ -155,7 +155,7 @@ struct GroupTabView: View {
                         await viewModel.searchRunClubs(appEnvironment: appEnvironment, searchText: searchText)
                     }
                 }
-                .onChange(of: searchText) { newValue in
+                .onChange(of: searchText) { oldValue, newValue in
                     if newValue.isEmpty {
                         isSearching = false
                         Task {
