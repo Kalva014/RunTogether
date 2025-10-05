@@ -751,15 +751,47 @@ class SupabaseConnection: ObservableObject {
     
     // MARK: - Global Leaderboard Management
     /// Fetch the top N users on the global leaderboard
-    func fetchGlobalLeaderboard(top n: Int = 10) async throws -> [GlobalLeaderboardEntry] {
+    func fetchGlobalLeaderboard(page: Int = 0, pageSize: Int = 10) async throws -> [GlobalLeaderboardEntry] {
+        let offset = page * pageSize
+        
         let leaderboard: [GlobalLeaderboardEntry] = try await client
             .from("Global_Leaderboard")
             .select()
             .order("total_races_completed", ascending: false)
-            .limit(n)
+            .range(from: offset, to: offset + pageSize - 1)
             .execute()
             .value ?? []
         return leaderboard
+    }
+    
+    /// Gets total number of users on the leaderboard
+    func fetchGlobalLeaderboardCount() async throws -> Int {
+        let response = try await client
+            .from("Global_Leaderboard")
+            .select("user_id", count: .exact)
+            .execute()
+        
+        return response.count ?? 0
+    }
+    
+    /// Fetch the current user's rank on the leaderboard
+    /// - Returns: User's rank (1-based) or nil if not found
+    func fetchMyLeaderboardRank() async throws -> Int? {
+        guard let userId = self.currentUserId else { return nil }
+        
+        // Get user's total races
+        let myStats = try await fetchMyLeaderboardStats()
+        guard let myRaces = myStats?.total_races_completed else { return nil }
+        
+        // Count how many users have more races
+        let response = try await client
+            .from("Global_Leaderboard")
+            .select("user_id", count: .exact)
+            .gt("total_races_completed", value: myRaces)
+            .execute()
+        
+        let rank = (response.count ?? 0) + 1
+        return rank
     }
     
     /// Update the leaderboard after a race finishes
