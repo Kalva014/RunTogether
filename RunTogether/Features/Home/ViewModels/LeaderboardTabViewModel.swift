@@ -25,7 +25,6 @@
 //}
 
 
-
 //
 //  LeaderboardTabViewModel.swift
 //  RunTogether
@@ -40,7 +39,9 @@ import SwiftUI
 @MainActor
 class LeaderboardTabViewModel: ObservableObject {
     @Published var leaderboardEntries: [GlobalLeaderboardEntry] = []
+    @Published var profiles: [UUID: Profile] = [:] // Store profiles by user_id
     @Published var myStats: GlobalLeaderboardEntry?
+    @Published var myProfile: Profile?
     @Published var myRank: Int?
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -54,6 +55,32 @@ class LeaderboardTabViewModel: ObservableObject {
     var totalPages: Int {
         guard totalEntries > 0 else { return 0 }
         return (totalEntries + pageSize - 1) / pageSize
+    }
+    
+    var myDisplayName: String {
+        if let myProfile = myProfile {
+            if !myProfile.username.isEmpty {
+                return myProfile.username
+            } else if !myProfile.first_name.isEmpty && !myProfile.last_name.isEmpty {
+                return "\(myProfile.first_name) \(myProfile.last_name)"
+            } else if !myProfile.first_name.isEmpty {
+                return myProfile.first_name
+            }
+        }
+        return "You"
+    }
+    
+    func displayName(for userId: UUID) -> String {
+        if let profile = profiles[userId] {
+            if !profile.username.isEmpty {
+                return profile.username
+            } else if !profile.first_name.isEmpty && !profile.last_name.isEmpty {
+                return "\(profile.first_name) \(profile.last_name)"
+            } else if !profile.first_name.isEmpty {
+                return profile.first_name
+            }
+        }
+        return "User \(userId.uuidString.prefix(8))"
     }
     
     func fetchLeaderboard(appEnvironment: AppEnvironment, page: Int? = nil) async {
@@ -76,11 +103,31 @@ class LeaderboardTabViewModel: ObservableObject {
                 leaderboardEntries.append(contentsOf: entries)
             }
             
+            // Fetch profiles for new entries
+            await fetchProfilesForEntries(entries, appEnvironment: appEnvironment)
+            
             hasMorePages = entries.count == pageSize
             isLoading = false
         } catch {
             errorMessage = "Failed to load leaderboard: \(error.localizedDescription)"
             isLoading = false
+        }
+    }
+    
+    func fetchProfilesForEntries(_ entries: [GlobalLeaderboardEntry], appEnvironment: AppEnvironment) async {
+        for entry in entries {
+            // Skip if we already have this profile
+            if profiles[entry.user_id] != nil {
+                continue
+            }
+            
+            do {
+                if let profile = try await appEnvironment.supabaseConnection.getProfileById(userId: entry.user_id) {
+                    profiles[entry.user_id] = profile
+                }
+            } catch {
+                print("Failed to fetch profile for user \(entry.user_id): \(error)")
+            }
         }
     }
     
@@ -96,6 +143,7 @@ class LeaderboardTabViewModel: ObservableObject {
         do {
             myStats = try await appEnvironment.supabaseConnection.fetchMyLeaderboardStats()
             myRank = try await appEnvironment.supabaseConnection.fetchMyLeaderboardRank()
+            myProfile = try await appEnvironment.supabaseConnection.getProfile()
         } catch {
             print("Failed to fetch my stats: \(error)")
         }
@@ -110,6 +158,7 @@ class LeaderboardTabViewModel: ObservableObject {
     func refresh(appEnvironment: AppEnvironment) async {
         currentPage = 0
         leaderboardEntries = []
+        profiles = [:]
         hasMorePages = true
         
         async let leaderboardTask: () = fetchLeaderboard(appEnvironment: appEnvironment)

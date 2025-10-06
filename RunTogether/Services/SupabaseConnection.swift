@@ -104,14 +104,61 @@ class SupabaseConnection: ObservableObject {
     func getProfile() async throws -> Profile? {
         guard let userId = self.currentUserId else { return nil }
         
-        let response: PostgrestResponse<Profile> = try await self.client
-            .from("Profiles")
-            .select()
-            .eq("id", value: userId.uuidString)
-            .single()
-            .execute()
+        do {
+            
+            let response: PostgrestResponse<Profile> = try await self.client
+                .from("Profiles")
+                .select()
+                .eq("id", value: userId.uuidString)
+                .single()
+                .execute()
+            
+            return response.value
+        }
+        catch {
+            print("Error: \(error)")
+            return nil
+        }
+    }
+    
+    /// Fetch profile for a specific user id
+    func getProfileById(userId: UUID) async throws -> Profile? {
+        guard let _ = self.currentUserId else { return nil }
         
-        return response.value
+        do {
+            let response: PostgrestResponse<Profile> = try await self.client
+                .from("Profiles")
+                .select()
+                .eq("id", value: userId.uuidString)
+                .single()
+                .execute()
+            
+            return response.value
+        }
+        catch {
+            print("Error: \(error)")
+            return nil
+        }
+    }
+    
+    /// Fetch profile for a specific username
+    func getProfileByUsername(username: String) async throws -> Profile? {
+        guard let _ = self.currentUserId else { return nil }
+        
+        do {
+            let response: PostgrestResponse<Profile> = try await self.client
+                .from("Profiles")
+                .select()
+                .eq("username", value: username)
+                .single()
+                .execute()
+            
+            return response.value
+        }
+        catch {
+            print("Error: \(error)")
+            return nil
+        }
     }
     
     // MARK: - Authentication

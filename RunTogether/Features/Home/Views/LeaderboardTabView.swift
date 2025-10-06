@@ -25,7 +25,6 @@
 //    LeaderboardTabView()
 //}
 
-
 //
 //  LeaderboardView.swift
 //  RunTogether
@@ -43,8 +42,12 @@ struct LeaderboardTabView: View {
             VStack(spacing: 0) {
                 // My Stats Card
                 if let myStats = viewModel.myStats {
-                    MyStatsCard(stats: myStats, rank: viewModel.myRank)
-                        .padding()
+                    MyStatsCard(
+                        stats: myStats,
+                        rank: viewModel.myRank,
+                        displayName: viewModel.myDisplayName
+                    )
+                    .padding()
                 }
                 
                 // Leaderboard List
@@ -53,6 +56,7 @@ struct LeaderboardTabView: View {
                         ForEach(Array(viewModel.leaderboardEntries.enumerated()), id: \.element.user_id) { index, entry in
                             LeaderboardRow(
                                 entry: entry,
+                                displayName: viewModel.displayName(for: entry.user_id),
                                 rank: (viewModel.currentPage * viewModel.pageSize) + index + 1,
                                 isCurrentUser: entry.user_id == appEnvironment.supabaseConnection.currentUserId
                             )
@@ -106,12 +110,18 @@ struct LeaderboardTabView: View {
 struct MyStatsCard: View {
     let stats: GlobalLeaderboardEntry
     let rank: Int?
+    let displayName: String
     
     var body: some View {
         VStack(spacing: 12) {
             HStack {
-                Text("Your Stats")
-                    .font(.headline)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(displayName)
+                        .font(.headline)
+                    Text("Your Stats")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
                 Spacer()
                 if let rank = rank {
                     Text("#\(rank)")
@@ -168,6 +178,7 @@ struct StatItem: View {
 
 struct LeaderboardRow: View {
     let entry: GlobalLeaderboardEntry
+    let displayName: String
     let rank: Int
     let isCurrentUser: Bool
     
@@ -186,7 +197,7 @@ struct LeaderboardRow: View {
             
             // User Stats
             VStack(alignment: .leading, spacing: 4) {
-                Text("User \(entry.user_id.uuidString.prefix(8))")
+                Text(displayName)
                     .font(.headline)
                     .foregroundColor(isCurrentUser ? .blue : .primary)
                 
