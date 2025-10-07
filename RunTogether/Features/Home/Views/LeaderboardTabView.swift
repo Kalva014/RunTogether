@@ -1,30 +1,3 @@
-////
-////  LeaderboardView.swift
-////  RunTogether
-////
-////  Created by Kenneth Alvarez on 9/22/25.
-////
-//import SwiftUI
-//
-//struct LeaderboardTabView: View {
-//    @EnvironmentObject var appEnvironment: AppEnvironment
-//    @StateObject var viewModel: LeaderboardTabViewModel
-//    
-//    init() {
-//        _viewModel = StateObject(wrappedValue: LeaderboardTabViewModel())
-//    }
-//    
-//    var body: some View {
-//        Text("Global Leaderboards")
-//        
-//        
-//    }
-//}
-//
-//#Preview{
-//    LeaderboardTabView()
-//}
-
 //
 //  LeaderboardView.swift
 //  RunTogether

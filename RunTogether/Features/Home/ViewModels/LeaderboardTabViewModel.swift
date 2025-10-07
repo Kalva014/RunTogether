@@ -4,33 +4,6 @@
 //
 //  Created by Kenneth Alvarez on 10/2/25.
 //
-//
-//import Foundation
-//import Supabase
-//import SwiftUI
-//
-//@MainActor
-//class LeaderboardTabViewModel: ObservableObject {
-//    func fetchLeaderboard(appEnvironment: AppEnvironment, ) async throws {
-//        appEnvironment.supabaseConnection.fetchGlobalLeaderboard()
-//    }
-//    
-//    func fetchMyLeaderboard(appEnvironment: AppEnvironment) async throws {
-//        appEnvironment.supabaseConnection.fetchMyLeaderboardStats()
-//    }
-//    
-//    func searchLeaderboard(username: String) {
-//        
-//    }
-//}
-
-
-//
-//  LeaderboardTabViewModel.swift
-//  RunTogether
-//
-//  Created by Kenneth Alvarez on 10/2/25.
-//
 
 import Foundation
 import Supabase
