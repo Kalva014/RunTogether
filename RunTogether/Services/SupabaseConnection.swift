@@ -70,12 +70,17 @@ class SupabaseConnection: ObservableObject {
             location: location
         )
         
-        let res = try await self.client
-            .from("Profiles")
-            .insert(newRowData)
-            .execute()
-        
-        print("Profile was created with the following status code: \(res.status)")
+        do {
+            
+            let res = try await self.client
+                .from("Profiles")
+                .insert(newRowData)
+                .execute()
+            
+            print("Profile was created with the following status code: \(res.status)")
+        } catch {
+            print("Error creating profile: \(error)")
+        }
     }
     
     func updateProfile(username: String? = nil, firstName: String? = nil, lastName: String? = nil, location: String? = nil) async throws {
@@ -163,27 +168,45 @@ class SupabaseConnection: ObservableObject {
     
     // MARK: - Authentication
     func signUp(email: String, password: String, username: String) async throws -> User {
-        let response = try await self.client.auth.signUp(
-            email: email,
-            password: password,
-            data: ["username": AnyJSON(username)]
-        )
-        self.currentUserId = response.user.id
-        self.isAuthenticated = true
-        return response.user
+        do {
+            let response = try await self.client.auth.signUp(
+                email: email,
+                password: password,
+                data: ["username": AnyJSON(username)]
+            )
+            self.currentUserId = response.user.id
+            self.isAuthenticated = true
+            return response.user
+        }
+        catch {
+            print("Could not sign up: \(error)")
+            throw error
+        }
     }
     
     func signIn(email: String, password: String) async throws -> User {
-        let response = try await self.client.auth.signIn(email: email, password: password)
-        self.currentUserId = response.user.id
-        self.isAuthenticated = true
-        return response.user
+        do {
+            let response = try await self.client.auth.signIn(email: email, password: password)
+            self.currentUserId = response.user.id
+            self.isAuthenticated = true
+            return response.user
+        }
+        catch {
+            print("Could not sign in: \(error)")
+            throw error
+        }
     }
     
     func signOut() async throws {
-        try await self.client.auth.signOut()
-        self.currentUserId = nil
-        self.isAuthenticated = false
+        do {
+            try await self.client.auth.signOut()
+            self.currentUserId = nil
+            self.isAuthenticated = false
+        }
+        catch {
+            print("Could not sign out: \(error)")
+            throw error
+        }
     }
     
     // MARK: - Multiplayer Methods
@@ -193,39 +216,45 @@ class SupabaseConnection: ObservableObject {
                           userInfo: [NSLocalizedDescriptionKey: "User not signed in"])
         }
         
-        // Create race
-        let brandNewRace = Race(
-            id: nil,
-            name: name,
-            mode: mode,
-            start_time: start_time,
-            end_time: nil
-        )
-        
-        let newRace: Race = try await self.client
-            .from("Races")
-            .insert(brandNewRace)
-            .select()
-            .execute()
-            .value
-        
-        // Add user as participant
-        let participant = RaceParticipants(
-            id: newRace.id!,
-            created_at: Date(),
-            user_id: userId,
-            finish_time: nil,
-            distance_covered: 0.0,
-            place: nil,
-            average_pace: nil
-        )
-        
-        _ = try await self.client
-            .from("Race_Participants")
-            .insert(participant)
-            .execute()
-        
-        return newRace
+        do {
+            // Create race
+            let brandNewRace = Race(
+                id: nil,
+                name: name,
+                mode: mode,
+                start_time: start_time,
+                end_time: nil
+            )
+            
+            let newRace: Race = try await self.client
+                .from("Races")
+                .insert(brandNewRace)
+                .select()
+                .execute()
+                .value
+            
+            // Add user as participant
+            let participant = RaceParticipants(
+                id: newRace.id!,
+                created_at: Date(),
+                user_id: userId,
+                finish_time: nil,
+                distance_covered: 0.0,
+                place: nil,
+                average_pace: nil
+            )
+            
+            _ = try await self.client
+                .from("Race_Participants")
+                .insert(participant)
+                .execute()
+            
+            return newRace
+        }
+        catch {
+            print("Could not create race: \(error)")
+            throw error
+        }
     }
     
     func leaveRace() async {
@@ -241,75 +270,92 @@ class SupabaseConnection: ObservableObject {
                           userInfo: [NSLocalizedDescriptionKey: "User not signed in"])
         }
         
-        let currNumParticipants = try await self.client
-            .from("Race_Participants")
-            .select("race_id", head: true, count: CountOption.exact)
-            .eq("race_id", value: raceId.uuidString)
-            .execute()
-            .count
-        
-        guard currNumParticipants! < maxParticipants else {
-            print("Race full")
-            return
+        do {
+            let currNumParticipants = try await self.client
+                .from("Race_Participants")
+                .select("race_id", head: true, count: CountOption.exact)
+                .eq("race_id", value: raceId.uuidString)
+                .execute()
+                .count
+            
+            guard currNumParticipants! < maxParticipants else {
+                print("Race full")
+                return
+            }
+            
+            let participant = RaceParticipants(
+                id: raceId,
+                created_at: Date(),
+                user_id: userId,
+                finish_time: nil,
+                distance_covered: 0.0,
+                place: nil,
+                average_pace: nil
+            )
+            
+            _ = try await self.client
+                .from("Race_Participants")
+                .insert(participant)
+                .execute()
+            
+            print("Joined race \(raceId)")
         }
-        
-        let participant = RaceParticipants(
-            id: raceId,
-            created_at: Date(),
-            user_id: userId,
-            finish_time: nil,
-            distance_covered: 0.0,
-            place: nil,
-            average_pace: nil
-        )
-        
-        _ = try await self.client
-            .from("Race_Participants")
-            .insert(participant)
-            .execute()
-        
-        print("Joined race \(raceId)")
+        catch {
+            print("Error joining race: \(error)")
+        }
     }
     
     func joinRandomRace(mode: String, start_time: Date, maxParticipants: Int) async throws {
-        let races: [Race] = try await self.client
-            .from("Races")
-            .select()
-            .is("end_time", value: nil)
-            .execute()
-            .value
-        
-        for race in races.shuffled() {
-            do {
-                try await joinRaceWithCap(raceId: race.id!, maxParticipants: maxParticipants)
-                print("Joined race \(race.id!)")
-                return
-            } catch { continue }
+        do {
+            let races: [Race] = try await self.client
+                .from("Races")
+                .select()
+                .is("end_time", value: nil)
+                .execute()
+                .value
+            
+            for race in races.shuffled() {
+                do {
+                    try await joinRaceWithCap(raceId: race.id!, maxParticipants: maxParticipants)
+                    print("Joined race \(race.id!)")
+                    return
+                } catch { continue }
+            }
+            
+            _ = try await createRace(name: "", mode: mode, start_time: start_time)
         }
-        
-        _ = try await createRace(name: "", mode: mode, start_time: start_time)
+        catch {
+            print("Error joining random race: \(error)")
+            throw error
+        }
     }
     
     // MARK: - Race Updates
     func sendRaceUpdate(raceId: UUID, distance: Double, pace: Double) async throws {
         guard let userId = self.currentUserId else { return }
         
-        let update = RaceUpdates(
-            id: nil,
-            created_at: Date(),
-            race_id: raceId,
-            user_id: userId,
-            current_distance: distance,
-            current_pace: pace
-        )
-        
-        _ = try await self.client
-            .from("Race_Updates")
-            .insert(update)
-            .execute()
-        
-        // Automatically check if the race is finished
-        try await checkIfRaceFinished(raceId: raceId)
+        do {
+            let update = RaceUpdates(
+                id: nil,
+                created_at: Date(),
+                race_id: raceId,
+                user_id: userId,
+                current_distance: distance,
+                current_pace: pace
+            )
+            
+            _ = try await self.client
+                .from("Race_Updates")
+                .insert(update)
+                .execute()
+            
+            // Automatically check if the race is finished
+            try await checkIfRaceFinished(raceId: raceId)
+        }
+        catch {
+            print("Error sending race update: \(error)")
+            throw error
+        }
     }
     
     func subscribeToRaceUpdates(raceId: UUID) {
@@ -341,82 +387,97 @@ class SupabaseConnection: ObservableObject {
     
     // MARK: - Race Completion
     func checkIfRaceFinished(raceId: UUID) async throws {
-        let participants: [RaceParticipants] = try await self.client
-            .from("Race_Participants")
-            .select()
-            .eq("race_id", value: raceId.uuidString)
-            .execute()
-            .value
-        
-        let allFinished = participants.allSatisfy { $0.finish_time != nil }
-        
-        if allFinished {
-            try await self.client
-                .from("Races")
-                .update(["end_time": ISO8601DateFormatter().string(from: Date())])
-                .eq("id", value: raceId.uuidString)
-                .execute()
-            
-            // Cleanup race updates
-            try await self.client
-                .from("Race_Updates")
-                .delete()
+        do {
+            let participants: [RaceParticipants] = try await self.client
+                .from("Race_Participants")
+                .select()
                 .eq("race_id", value: raceId.uuidString)
                 .execute()
+                .value
             
-            await leaveRace()
-            print("Race \(raceId) finished & cleaned up.")
+            let allFinished = participants.allSatisfy { $0.finish_time != nil }
+            
+            if allFinished {
+                try await self.client
+                    .from("Races")
+                    .update(["end_time": ISO8601DateFormatter().string(from: Date())])
+                    .eq("id", value: raceId.uuidString)
+                    .execute()
+                
+                // Cleanup race updates
+                try await self.client
+                    .from("Race_Updates")
+                    .delete()
+                    .eq("race_id", value: raceId.uuidString)
+                    .execute()
+                
+                await leaveRace()
+                print("Race \(raceId) finished & cleaned up.")
+            }
+        }
+        catch {
+            print("Error checking race finish: \(error)")
         }
     }
     
     func markParticipantDisconnected(raceId: UUID, userId: UUID) async throws {
-        let rowData: [String: AnyJSON] = [
-            "finish_time": "N/A", // THIS IS SUPPOSED TO BE A STRING BUT IT IS TRIPPING
-            "distance_covered": 0.0,
-            "average_pace": 0.0
-        ]
-        
-        _ = try await client
-            .from("Race_Participants")
-            .update(rowData)
-            .eq("race_id", value: raceId.uuidString)
-            .eq("user_id", value: userId.uuidString)
-            .execute()
-        
-        print("User \(userId) disconnected, marked as finished/N/A")
-        try await checkIfRaceFinished(raceId: raceId)
+        do {
+            let rowData: [String: AnyJSON] = [
+                "finish_time": "N/A", // THIS IS SUPPOSED TO BE A STRING BUT IT IS TRIPPING
+                "distance_covered": 0.0,
+                "average_pace": 0.0
+            ]
+            
+            _ = try await client
+                .from("Race_Participants")
+                .update(rowData)
+                .eq("race_id", value: raceId.uuidString)
+                .eq("user_id", value: userId.uuidString)
+                .execute()
+            
+            print("User \(userId) disconnected, marked as finished/N/A")
+            try await checkIfRaceFinished(raceId: raceId)
+        }
+        catch {
+            print("Error marking participant as finished: \(error)")
+        }
     }
     
     func markParticipantFinished(raceId: UUID, distance: Double, pace: Double, finishPlace: Int) async throws {
         guard let userId = self.currentUserId else { return }
         
-        // Correctly wrap each value in its AnyJSON enum case
-       let rowData: [String: AnyJSON] = [
-           "finish_time": AnyJSON.string(Date().ISO8601Format()), // Convert Date to ISO 8601 string
-           "distance_covered": AnyJSON.double(distance), // Use AnyJSON.double
-           "average_pace": AnyJSON.double(pace),       // Use AnyJSON.double
-           "place": AnyJSON.integer(finishPlace)            // Use AnyJSON.int
-       ]
-
-
-        // 1️⃣ Update participant as finished in Race_Participants
-        _ = try await client
-            .from("Race_Participants")
-            .update(rowData)
-            .eq("race_id", value: raceId.uuidString)
-            .eq("user_id", value: userId.uuidString)
-            .execute()
-        
-        print("User \(userId) marked as finished in race \(raceId) with place \(finishPlace).")
-
-        // 2️⃣ Update global leaderboard
-        let finishedInTopThree = finishPlace <= 3
-        try await updateGlobalLeaderboard(userId: userId, distance: distance, finishedInTopThree: finishedInTopThree)
-        
-        print("Global leaderboard updated for user \(userId).")
-
-        // 3️⃣ Check if race is complete
-        try await checkIfRaceFinished(raceId: raceId)
+        do {
+            // Correctly wrap each value in its AnyJSON enum case
+            let rowData: [String: AnyJSON] = [
+                "finish_time": AnyJSON.string(Date().ISO8601Format()), // Convert Date to ISO 8601 string
+                "distance_covered": AnyJSON.double(distance), // Use AnyJSON.double
+                "average_pace": AnyJSON.double(pace),       // Use AnyJSON.double
+                "place": AnyJSON.integer(finishPlace)            // Use AnyJSON.int
+            ]
+            
+            
+            // 1️⃣ Update participant as finished in Race_Participants
+            _ = try await client
+                .from("Race_Participants")
+                .update(rowData)
+                .eq("race_id", value: raceId.uuidString)
+                .eq("user_id", value: userId.uuidString)
+                .execute()
+            
+            print("User \(userId) marked as finished in race \(raceId) with place \(finishPlace).")
+            
+            // 2️⃣ Update global leaderboard
+            let finishedInTopThree = finishPlace <= 3
+            try await updateGlobalLeaderboard(userId: userId, distance: distance, finishedInTopThree: finishedInTopThree)
+            
+            print("Global leaderboard updated for user \(userId).")
+            
+            // 3️⃣ Check if race is complete
+            try await checkIfRaceFinished(raceId: raceId)
+        }
+        catch {
+            print("Error marking participant finished: \(error)")
+        }
     }
 
     
@@ -427,113 +488,129 @@ class SupabaseConnection: ObservableObject {
     func addFriend(username: String) async throws {
         guard let userId = self.currentUserId else { return }
 
-        // Look up friend by username
-        let users: [Profile] = try await client
-            .from("Profiles")
-            .select()
-            .eq("username", value: username)
-            .execute()
-            .value ?? []
-
-        guard let friend = users.first else {
-            print("User with username \(username) not found")
-            return
-        }
-
-        // Prevent adding yourself
-        guard friend.id != userId else {
-            print("Cannot add yourself as a friend")
-            return
-        }
-
-        // Check if friendship already exists (either direction)
-        let existing: [Friend] = try await client
-            .from("Friends")
-            .select()
-            .or("""
+        do {
+            // Look up friend by username
+            let users: [Profile] = try await client
+                .from("Profiles")
+                .select()
+                .eq("username", value: username)
+                .execute()
+                .value ?? []
+            
+            guard let friend = users.first else {
+                print("User with username \(username) not found")
+                return
+            }
+            
+            // Prevent adding yourself
+            guard friend.id != userId else {
+                print("Cannot add yourself as a friend")
+                return
+            }
+            
+            // Check if friendship already exists (either direction)
+            let existing: [Friend] = try await client
+                .from("Friends")
+                .select()
+                .or("""
                 (user_id_1.eq.\(userId.uuidString),user_id_2.eq.\(friend.id.uuidString)),
                 (user_id_1.eq.\(friend.id.uuidString),user_id_2.eq.\(userId.uuidString))
             """)
-            .execute()
-            .value ?? []
-
-        guard existing.isEmpty else {
-            print("Friendship already exists")
-            return
+                .execute()
+                .value ?? []
+            
+            guard existing.isEmpty else {
+                print("Friendship already exists")
+                return
+            }
+            
+            // Insert new friendship
+            _ = try await client
+                .from("Friends")
+                .insert([
+                    "user_id_1": userId.uuidString,
+                    "user_id_2": friend.id.uuidString
+                ])
+                .execute()
+            
+            print("Friend added: \(username)")
         }
-
-        // Insert new friendship
-        _ = try await client
-            .from("Friends")
-            .insert([
-                "user_id_1": userId.uuidString,
-                "user_id_2": friend.id.uuidString
-            ])
-            .execute()
-
-        print("Friend added: \(username)")
+        catch {
+            print("Error adding friend: \(error)")
+        }
     }
 
     /// Removes a friend by their username
     func removeFriend(username: String) async throws {
         guard let userId = self.currentUserId else { return }
 
-        let users: [Profile] = try await client
-            .from("Profiles")
-            .select()
-            .eq("username", value: username)
-            .execute()
-            .value ?? []
-
-        guard let friend = users.first else {
-            print("User with username \(username) not found")
-            return
-        }
-
-        // Delete friendship (both directions)
-        _ = try await client
-            .from("Friends")
-            .delete()
-            .or("""
+        do {
+            let users: [Profile] = try await client
+                .from("Profiles")
+                .select()
+                .eq("username", value: username)
+                .execute()
+                .value ?? []
+            
+            guard let friend = users.first else {
+                print("User with username \(username) not found")
+                return
+            }
+            
+            // Delete friendship (both directions)
+            _ = try await client
+                .from("Friends")
+                .delete()
+                .or("""
                 (user_id_1.eq.\(userId.uuidString),user_id_2.eq.\(friend.id.uuidString)),
                 (user_id_1.eq.\(friend.id.uuidString),user_id_2.eq.\(userId.uuidString))
             """)
-            .execute()
-
-        print("Friend removed: \(username)")
+                .execute()
+            
+            print("Friend removed: \(username)")
+        }
+        catch {
+            print("Error removing friend: \(error)")
+        }
     }
 
     /// Lists all friends for the current user
     func listFriends() async throws -> [String] {
         guard let userId = self.currentUserId else { return [] }
-
-        let friends: [Friend] = try await client
-            .from("Friends")
-            .select()
-            .or("""
+        
+        do {
+            let friends: [Friend] = try await client
+                .from("Friends")
+                .select()
+                .or("""
                 user_id_1.eq.\(userId.uuidString),
                 user_id_2.eq.\(userId.uuidString)
             """)
-            .execute()
-            .value ?? []
-
-        var friendIds: [UUID] = []
-
-        for f in friends {
-            if f.user_id_1 != userId { friendIds.append(f.user_id_1) }
-            if f.user_id_2 != userId { friendIds.append(f.user_id_2) }
+                .execute()
+                .value ?? []
+            
+            var friendIds: [UUID] = []
+            
+            for f in friends {
+                if f.user_id_1 != userId { friendIds.append(f.user_id_1) }
+                if f.user_id_2 != userId { friendIds.append(f.user_id_2) }
+            }
+            
+            if friendIds.isEmpty { return [] }
+            
+            let profiles: [Profile] = try await client
+                .from("Profiles")
+                .select()
+                .in("id", values: friendIds.map { $0.uuidString })
+                .execute()
+                .value ?? []
+            
+            return profiles.compactMap { $0.username }
         }
-
-        if friendIds.isEmpty { return [] }
-
-        let profiles: [Profile] = try await client
-            .from("Profiles")
-            .select()
-            .in("id", values: friendIds.map { $0.uuidString })
-            .execute()
-            .value ?? []
-
-        return profiles.compactMap { $0.username }
+        catch {
+            print("Error listing friends: \(error)")
+            return []
+        }
     }
 
     // MARK: - Run Club Management
@@ -541,165 +618,223 @@ class SupabaseConnection: ObservableObject {
     func createRunClub(name: String, description: String? = nil) async throws {
         guard let userId = self.currentUserId else { return }
 
-        // Check if club already exists
-        let existing: [RunClub] = try await client
-            .from("Run_Clubs")
-            .select()
-            .eq("name", value: name)
-            .execute()
-            .value ?? []
-
-        guard existing.isEmpty else {
-            print("Run club \(name) already exists")
-            return
+        do {
+            // Check if club already exists
+            let existing: [RunClub] = try await client
+                .from("Run_Clubs")
+                .select()
+                .eq("name", value: name)
+                .execute()
+                .value ?? []
+            
+            guard existing.isEmpty else {
+                print("Run club \(name) already exists")
+                return
+            }
+            
+            // Insert new club
+            _ = try await client
+                .from("Run_Clubs")
+                .insert([
+                    "name": name,
+                    "owner": userId.uuidString,
+                    "description": description
+                ])
+                .execute()
+            
+            print("Run club \(name) created!")
+            
+            try await self.joinRunClub(name: name)
         }
-
-        // Insert new club
-        _ = try await client
-            .from("Run_Clubs")
-            .insert([
-                "name": name,
-                "owner": userId.uuidString,
-                "description": description
-            ])
-            .execute()
-
-        print("Run club \(name) created!")
-        
-        try await self.joinRunClub(name: name)
+        catch {
+            print("Error creating run club: \(error)")
+        }
     }
 
     /// Join a run club by name
     func joinRunClub(name: String) async throws {
         guard let userId = self.currentUserId else { return }
 
-        // Check if the user is already a member
-        let existing: [RunClubMember] = try await client
-            .from("Run_Club_Members")
-            .select()
-            .eq("group_id", value: name)
-            .eq("user_id", value: userId.uuidString)
-            .execute()
-            .value ?? []
-
-        guard existing.isEmpty else {
-            print("Already a member of \(name)")
-            return
+        do {
+            // Check if the user is already a member
+            let existing: [RunClubMember] = try await client
+                .from("Run_Club_Members")
+                .select()
+                .eq("group_id", value: name)
+                .eq("user_id", value: userId.uuidString)
+                .execute()
+                .value ?? []
+            
+            guard existing.isEmpty else {
+                print("Already a member of \(name)")
+                return
+            }
+            
+            // Insert membership
+            _ = try await client
+                .from("Run_Club_Members")
+                .insert([
+                    "user_id": userId.uuidString,
+                    "group_id": name
+                ])
+                .execute()
+            
+            print("Joined run club \(name)")
         }
-
-        // Insert membership
-        _ = try await client
-            .from("Run_Club_Members")
-            .insert([
-                "user_id": userId.uuidString,
-                "group_id": name
-            ])
-            .execute()
-
-        print("Joined run club \(name)")
+        catch {
+            print("Error joining run club: \(error)")
+        }
     }
 
     /// Leave a run club by name
     func leaveRunClub(name: String) async throws {
         guard let userId = self.currentUserId else { return }
 
-        _ = try await client
-            .from("Run_Club_Members")
-            .delete()
-            .eq("group_id", value: name)
-            .eq("user_id", value: userId.uuidString)
-            .execute()
-
-        print("Left run club \(name)")
+        do {
+            _ = try await client
+                .from("Run_Club_Members")
+                .delete()
+                .eq("group_id", value: name)
+                .eq("user_id", value: userId.uuidString)
+                .execute()
+            
+            print("Left run club \(name)")
+        }
+        catch {
+            print("Error leaving run club: \(error)")
+        }
     }
 
     /// List all members of a run club
     func listRunClubMembers(name: String) async throws -> [String] {
-        let members: [RunClubMember] = try await client
-            .from("Run_Club_Members")
-            .select()
-            .eq("group_id", value: name)
-            .execute()
-            .value ?? []
-
-        let userIds = members.map { $0.user_id }
-
-        if userIds.isEmpty { return [] }
-
-        // Fetch usernames from Profiles
-        let profiles: [Profile] = try await client
-            .from("Profiles")
-            .select()
-            .in("id", values: userIds.map { $0.uuidString })
-            .execute()
-            .value ?? []
-
-        return profiles.compactMap { $0.username }
+        do {
+            let members: [RunClubMember] = try await client
+                .from("Run_Club_Members")
+                .select()
+                .eq("group_id", value: name)
+                .execute()
+                .value ?? []
+            
+            let userIds = members.map { $0.user_id }
+            
+            if userIds.isEmpty { return [] }
+            
+            // Fetch usernames from Profiles
+            let profiles: [Profile] = try await client
+                .from("Profiles")
+                .select()
+                .in("id", values: userIds.map { $0.uuidString })
+                .execute()
+                .value ?? []
+            
+            return profiles.compactMap { $0.username }
+        }
+        catch {
+            print("Error listing run club members: \(error)")
+            return []
+        }
     }
 
     /// List all run clubs the current user belongs to
     func listMyRunClubs() async throws -> [String] {
         guard let userId = self.currentUserId else { return [] }
 
-        let memberships: [RunClubMember] = try await client
-            .from("Run_Club_Members")
-            .select()
-            .eq("user_id", value: userId.uuidString)
-            .execute()
-            .value ?? []
-
-        return memberships.map { $0.group_id }
+        do {
+            let memberships: [RunClubMember] = try await client
+                .from("Run_Club_Members")
+                .select()
+                .eq("user_id", value: userId.uuidString)
+                .execute()
+                .value ?? []
+            
+            return memberships.map { $0.group_id }
+        }
+        catch {
+            print("Error listing run clubs: \(error)")
+            return []
+        }
     }
     
     /// Fetch all run clubs
     func listRunClubs() async throws -> [RunClub] {
-        let clubs: [RunClub] = try await client
-            .from("Run_Clubs")
-            .select()
-            .execute()
-            .value ?? []
-        
-        return clubs
+        do {
+            let clubs: [RunClub] = try await client
+                .from("Run_Clubs")
+                .select()
+                .execute()
+                .value ?? []
+            
+            return clubs
+        }
+        catch {
+            print("Error listing run clubs: \(error)")
+            return []
+        }
+    }
+    
+    /// Fetch specific run clubs a user is a part of
+    func listSpecificUserRunClubs(specificId: UUID) async throws -> [String] {
+        guard let _ = self.currentUserId else { return [] }
+
+        do {
+            let memberships: [RunClubMember] = try await client
+                .from("Run_Club_Members")
+                .select()
+                .eq("user_id", value: specificId.uuidString)
+                .execute()
+                .value ?? []
+            
+            return memberships.map { $0.group_id }
+        }
+        catch {
+            print("Error listing run clubs: \(error)")
+            return []
+        }
     }
     
     /// Delete a run club (only if the current user is the owner)
     func deleteRunClub(name: String) async throws {
         guard let userId = self.currentUserId else { return }
 
-        // Fetch the run club to check ownership
-        let clubs: [RunClub] = try await client
-            .from("Run_Clubs")
-            .select()
-            .eq("name", value: name)
-            .execute()
-            .value ?? []
-
-        guard let club = clubs.first else {
-            print("Run club \(name) not found")
-            return
+        do {
+            // Fetch the run club to check ownership
+            let clubs: [RunClub] = try await client
+                .from("Run_Clubs")
+                .select()
+                .eq("name", value: name)
+                .execute()
+                .value ?? []
+            
+            guard let club = clubs.first else {
+                print("Run club \(name) not found")
+                return
+            }
+            
+            // Verify current user is the owner
+            guard club.owner == userId else {
+                print("User is not the owner of run club \(name)")
+                return
+            }
+            
+            // Optionally delete memberships first (if your schema does not cascade automatically)
+            _ = try await client
+                .from("Run_Club_Members")
+                .delete()
+                .eq("group_id", value: name)
+                .execute()
+            
+            // Delete the run club
+            _ = try await client
+                .from("Run_Clubs")
+                .delete()
+                .eq("name", value: name)
+                .execute()
+            
+            print("Run club \(name) deleted by owner")
         }
-
-        // Verify current user is the owner
-        guard club.owner == userId else {
-            print("User is not the owner of run club \(name)")
-            return
+        catch {
+            print("Error deleting run club \(name): \(error)")
         }
-
-        // Optionally delete memberships first (if your schema does not cascade automatically)
-        _ = try await client
-            .from("Run_Club_Members")
-            .delete()
-            .eq("group_id", value: name)
-            .execute()
-
-        // Delete the run club
-        _ = try await client
-            .from("Run_Clubs")
-            .delete()
-            .eq("name", value: name)
-            .execute()
-
-        print("Run club \(name) deleted by owner")
     }
 
     // MARK: - Live Post Race Chat
@@ -708,19 +843,24 @@ class SupabaseConnection: ObservableObject {
 
     /// Send a chat message
     func sendMessage(raceId: UUID, userId: UUID, username: String?, message: String) async throws {
-        let chat = RaceChatMessage(
-            id: nil,
-            race_id: raceId,
-            user_id: userId,
-            username: username,
-            message: message,
-            created_at: nil
-        )
-        
-        _ = try await client
-            .from("Race_Chat")
-            .insert(chat)
-            .execute()
+        do {
+            let chat = RaceChatMessage(
+                id: nil,
+                race_id: raceId,
+                user_id: userId,
+                username: username,
+                message: message,
+                created_at: nil
+            )
+            
+            _ = try await client
+                .from("Race_Chat")
+                .insert(chat)
+                .execute()
+        }
+        catch {
+            print("Error sending chat message: \(error)")
+        }
     }
     
     /// Subscribe to live chat messages for a race
@@ -780,119 +920,174 @@ class SupabaseConnection: ObservableObject {
     
     /// Fetch past messages for a race
     func fetchMessages(raceId: UUID) async throws -> [RaceChatMessage] {
-        let messages: [RaceChatMessage] = try await client
-            .from("Race_Chat")
-            .select()
-            .eq("race_id", value: raceId.uuidString)
-            .order("created_at", ascending: true)
-            .execute()
-            .value ?? []
-        
-        DispatchQueue.main.async {
-            self.currentMessages = messages
+        do {
+            let messages: [RaceChatMessage] = try await client
+                .from("Race_Chat")
+                .select()
+                .eq("race_id", value: raceId.uuidString)
+                .order("created_at", ascending: true)
+                .execute()
+                .value ?? []
+            
+            DispatchQueue.main.async {
+                self.currentMessages = messages
+            }
+            
+            return messages
         }
-        
-        return messages
+        catch {
+            print("Error fetching messages: \(error)")
+            throw error
+        }
     }
     
     
     // MARK: - Global Leaderboard Management
     /// Fetch the top N users on the global leaderboard
     func fetchGlobalLeaderboard(page: Int = 0, pageSize: Int = 10) async throws -> [GlobalLeaderboardEntry] {
-        let offset = page * pageSize
-        
-        let leaderboard: [GlobalLeaderboardEntry] = try await client
-            .from("Global_Leaderboard")
-            .select()
-            .order("total_races_completed", ascending: false)
-            .range(from: offset, to: offset + pageSize - 1)
-            .execute()
-            .value ?? []
-        return leaderboard
+        do {
+            let offset = page * pageSize
+            
+            let leaderboard: [GlobalLeaderboardEntry] = try await client
+                .from("Global_Leaderboard")
+                .select()
+                .order("total_races_completed", ascending: false)
+                .range(from: offset, to: offset + pageSize - 1)
+                .execute()
+                .value ?? []
+            return leaderboard
+        }
+        catch {
+            print("Error fetching global leaderboard: \(error)")
+            throw error
+        }
     }
     
     /// Gets total number of users on the leaderboard
     func fetchGlobalLeaderboardCount() async throws -> Int {
-        let response = try await client
-            .from("Global_Leaderboard")
-            .select("user_id", count: .exact)
-            .execute()
-        
-        return response.count ?? 0
+        do {
+            let response = try await client
+                .from("Global_Leaderboard")
+                .select("user_id", count: .exact)
+                .execute()
+            
+            return response.count ?? 0
+        }
+        catch {
+            print("Error fetching global leaderboard count: \(error)")
+            throw error
+        }
     }
     
     /// Fetch the current user's rank on the leaderboard
     /// - Returns: User's rank (1-based) or nil if not found
     func fetchMyLeaderboardRank() async throws -> Int? {
-        guard let userId = self.currentUserId else { return nil }
+        guard let _ = self.currentUserId else { return nil }
         
-        // Get user's total races
-        let myStats = try await fetchMyLeaderboardStats()
-        guard let myRaces = myStats?.total_races_completed else { return nil }
-        
-        // Count how many users have more races
-        let response = try await client
-            .from("Global_Leaderboard")
-            .select("user_id", count: .exact)
-            .gt("total_races_completed", value: myRaces)
-            .execute()
-        
-        let rank = (response.count ?? 0) + 1
-        return rank
+        do {
+            // Get user's total races
+            let myStats = try await fetchMyLeaderboardStats()
+            guard let myRaces = myStats?.total_races_completed else { return nil }
+            
+            // Count how many users have more races
+            let response = try await client
+                .from("Global_Leaderboard")
+                .select("user_id", count: .exact)
+                .gt("total_races_completed", value: myRaces)
+                .execute()
+            
+            let rank = (response.count ?? 0) + 1
+            return rank
+        }
+        catch {
+            print("Error fetching my leaderboard rank: \(error)")
+            throw error
+        }
     }
     
     /// Update the leaderboard after a race finishes
     func updateGlobalLeaderboard(userId: UUID, distance: Double, finishedInTopThree: Bool) async throws {
-        // Check if user already has an entry
-        let entries: [GlobalLeaderboardEntry] = try await client
-            .from("Global_Leaderboard")
-            .select()
-            .eq("user_id", value: userId.uuidString)
-            .execute()
-            .value ?? []
-        
-        if let entry = entries.first {
-            // Update existing entry
-            let newRaces = (entry.total_races_completed ?? 0) + 1
-            let newDistance = (entry.total_distance_covered ?? 0) + distance
-            let newTopThree = (entry.top_three_finishes ?? 0) + (finishedInTopThree ? 1 : 0)
-            
-            _ = try await client
+        do {
+            // Check if user already has an entry
+            let entries: [GlobalLeaderboardEntry] = try await client
                 .from("Global_Leaderboard")
-                .update([
-                    "total_races_completed": newRaces,
-                    "total_distance_covered": newDistance,
-                    "top_three_finishes": Double(newTopThree)
-                ])
+                .select()
                 .eq("user_id", value: userId.uuidString)
                 .execute()
+                .value ?? []
             
-        } else {
-            let rowData = GlobalLeaderboardEntry(
-                id: nil,
-                user_id: userId,
-                total_races_completed: 1,
-                total_distance_covered: distance,
-                top_three_finishes: finishedInTopThree ? 1 : 0
-            )
-            
-            // Insert new entry
-            _ = try await client
-                .from("Global_Leaderboard")
-                .insert(rowData)
-                .execute()
+            if let entry = entries.first {
+                // Update existing entry
+                let newRaces = (entry.total_races_completed ?? 0) + 1
+                let newDistance = (entry.total_distance_covered ?? 0) + distance
+                let newTopThree = (entry.top_three_finishes ?? 0) + (finishedInTopThree ? 1 : 0)
+                
+                _ = try await client
+                    .from("Global_Leaderboard")
+                    .update([
+                        "total_races_completed": newRaces,
+                        "total_distance_covered": newDistance,
+                        "top_three_finishes": Double(newTopThree)
+                    ])
+                    .eq("user_id", value: userId.uuidString)
+                    .execute()
+                
+            } else {
+                let rowData = GlobalLeaderboardEntry(
+                    id: nil,
+                    user_id: userId,
+                    total_races_completed: 1,
+                    total_distance_covered: distance,
+                    top_three_finishes: finishedInTopThree ? 1 : 0
+                )
+                
+                // Insert new entry
+                _ = try await client
+                    .from("Global_Leaderboard")
+                    .insert(rowData)
+                    .execute()
+            }
+        }
+        catch {
+            print("Error updating global leaderboard: \(error)")
         }
     }
     
     /// Fetch the current user's leaderboard stats
     func fetchMyLeaderboardStats() async throws -> GlobalLeaderboardEntry? {
         guard let userId = self.currentUserId else { return nil }
-        let entries: [GlobalLeaderboardEntry] = try await client
-            .from("Global_Leaderboard")
-            .select()
-            .eq("user_id", value: userId.uuidString)
-            .execute()
-            .value ?? []
-        return entries.first
+        
+        do {
+            let entries: [GlobalLeaderboardEntry] = try await client
+                .from("Global_Leaderboard")
+                .select()
+                .eq("user_id", value: userId.uuidString)
+                .execute()
+                .value ?? []
+            return entries.first
+        }
+        catch {
+            print("Error fetching leaderboard stats: \(error)")
+            return nil
+        }
+    }
+    
+    /// Fetch the current user's leaderboard stats
+    func fetchSpecificUserLeaderboardStats(specificUserId: UUID) async throws -> GlobalLeaderboardEntry? {
+        guard let _ = self.currentUserId else { return nil }
+        
+        do {
+            let entries: [GlobalLeaderboardEntry] = try await client
+                .from("Global_Leaderboard")
+                .select()
+                .eq("user_id", value: specificUserId.uuidString)
+                .execute()
+                .value ?? []
+            return entries.first
+        }
+        catch {
+            print("Error fetching leaderboard stats: \(error)")
+            return nil
+        }
     }
 }

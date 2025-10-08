@@ -27,12 +27,15 @@ struct LeaderboardTabView: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         ForEach(Array(viewModel.leaderboardEntries.enumerated()), id: \.element.user_id) { index, entry in
-                            LeaderboardRow(
-                                entry: entry,
-                                displayName: viewModel.displayName(for: entry.user_id),
-                                rank: (viewModel.currentPage * viewModel.pageSize) + index + 1,
-                                isCurrentUser: entry.user_id == appEnvironment.supabaseConnection.currentUserId
-                            )
+                            NavigationLink(destination: ProfileDetailView(username: viewModel.displayName(for: entry.user_id))) {
+                                LeaderboardRow(
+                                    entry: entry,
+                                    displayName: viewModel.displayName(for: entry.user_id),
+                                    rank: (viewModel.currentPage * viewModel.pageSize) + index + 1,
+                                    isCurrentUser: entry.user_id == appEnvironment.supabaseConnection.currentUserId
+                                )
+                            }
+                            .buttonStyle(PlainButtonStyle())
                             .padding(.horizontal)
                             
                             // Load more when reaching last item
@@ -192,9 +195,15 @@ struct LeaderboardRow: View {
             
             Spacer()
             
-            if isCurrentUser {
-                Image(systemName: "person.fill")
-                    .foregroundColor(.blue)
+            HStack(spacing: 8) {
+                if isCurrentUser {
+                    Image(systemName: "person.fill")
+                        .foregroundColor(.blue)
+                }
+                
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
         }
         .padding()
@@ -204,6 +213,7 @@ struct LeaderboardRow: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(isCurrentUser ? Color.blue : Color.clear, lineWidth: 2)
         )
+        .contentShape(Rectangle()) // Makes entire row tappable
     }
     
     var rankColor: Color {
