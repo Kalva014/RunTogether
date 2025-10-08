@@ -512,10 +512,7 @@ class SupabaseConnection: ObservableObject {
             let existing: [Friend] = try await client
                 .from("Friends")
                 .select()
-                .or("""
-                (user_id_1.eq.\(userId.uuidString),user_id_2.eq.\(friend.id.uuidString)),
-                (user_id_1.eq.\(friend.id.uuidString),user_id_2.eq.\(userId.uuidString))
-            """)
+                .or("and(user_id_1.eq.\(userId.uuidString),user_id_2.eq.\(friend.id.uuidString)),and(user_id_1.eq.\(friend.id.uuidString),user_id_2.eq.\(userId.uuidString))")
                 .execute()
                 .value ?? []
             
@@ -551,22 +548,19 @@ class SupabaseConnection: ObservableObject {
                 .eq("username", value: username)
                 .execute()
                 .value ?? []
-            
+
             guard let friend = users.first else {
                 print("User with username \(username) not found")
                 return
             }
-            
+
             // Delete friendship (both directions)
             _ = try await client
                 .from("Friends")
                 .delete()
-                .or("""
-                (user_id_1.eq.\(userId.uuidString),user_id_2.eq.\(friend.id.uuidString)),
-                (user_id_1.eq.\(friend.id.uuidString),user_id_2.eq.\(userId.uuidString))
-            """)
+                .or("and(user_id_1.eq.\(userId.uuidString),user_id_2.eq.\(friend.id.uuidString)),and(user_id_1.eq.\(friend.id.uuidString),user_id_2.eq.\(userId.uuidString))")
                 .execute()
-            
+
             print("Friend removed: \(username)")
         }
         catch {
@@ -580,32 +574,29 @@ class SupabaseConnection: ObservableObject {
         
         do {
             let friends: [Friend] = try await client
-                .from("Friends")
-                .select()
-                .or("""
-                user_id_1.eq.\(userId.uuidString),
-                user_id_2.eq.\(userId.uuidString)
-            """)
-                .execute()
-                .value ?? []
-            
-            var friendIds: [UUID] = []
-            
-            for f in friends {
-                if f.user_id_1 != userId { friendIds.append(f.user_id_1) }
-                if f.user_id_2 != userId { friendIds.append(f.user_id_2) }
-            }
-            
-            if friendIds.isEmpty { return [] }
-            
-            let profiles: [Profile] = try await client
-                .from("Profiles")
-                .select()
-                .in("id", values: friendIds.map { $0.uuidString })
-                .execute()
-                .value ?? []
-            
-            return profiles.compactMap { $0.username }
+               .from("Friends")
+               .select()
+               .or("user_id_1.eq.\(userId.uuidString),user_id_2.eq.\(userId.uuidString)")
+               .execute()
+               .value ?? []
+
+           var friendIds: [UUID] = []
+
+           for f in friends {
+               if f.user_id_1 != userId { friendIds.append(f.user_id_1) }
+               if f.user_id_2 != userId { friendIds.append(f.user_id_2) }
+           }
+
+           if friendIds.isEmpty { return [] }
+
+           let profiles: [Profile] = try await client
+               .from("Profiles")
+               .select()
+               .in("id", values: friendIds.map { $0.uuidString })
+               .execute()
+               .value ?? []
+
+           return profiles.compactMap { $0.username }
         }
         catch {
             print("Error listing friends: \(error)")
