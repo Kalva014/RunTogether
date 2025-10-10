@@ -11,18 +11,16 @@ import SwiftUI
 @MainActor
 class GroupTabViewModel: ObservableObject {
     @Published var runClubs: [RunClub] = []
-    @Published var selectedClub: RunClub?
-    @Published var clubMembers: [String] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     
     private var searchTask: Task<Void, Never>?
     
     func createRunClub(appEnvironment: AppEnvironment, name: String, description: String) async throws {
+        isLoading = true
         defer { isLoading = false }
         
         do {
-            isLoading = true
             try await appEnvironment.supabaseConnection.createRunClub(name: name, description: description)
             // Update the local list after creating a new club
             try await fetchRunClubs(appEnvironment: appEnvironment)
@@ -32,43 +30,11 @@ class GroupTabViewModel: ObservableObject {
         }
     }
     
-    func joinRunClub(appEnvironment: AppEnvironment, clubName: String) async throws {
-        defer { isLoading = false }
-        
-        do {
-            isLoading = true
-            try await appEnvironment.supabaseConnection.joinRunClub(name: clubName)
-            // Refresh the list to show updated membership
-            try await fetchRunClubs(appEnvironment: appEnvironment)
-        } catch {
-            errorMessage = "Failed to join run club: \(error.localizedDescription)"
-            throw error
-        }
-    }
-    
-    func leaveRunClub(appEnvironment: AppEnvironment, clubName: String) async throws {
-        defer { isLoading = false }
-        
-        do {
-            isLoading = true
-            try await appEnvironment.supabaseConnection.leaveRunClub(name: clubName)
-            // Refresh the list to show updated membership
-            try await fetchRunClubs(appEnvironment: appEnvironment)
-            if selectedClub?.name == clubName {
-                selectedClub = nil
-                clubMembers = []
-            }
-        } catch {
-            errorMessage = "Failed to leave run club: \(error.localizedDescription)"
-            throw error
-        }
-    }
-    
     func fetchRunClubs(appEnvironment: AppEnvironment) async throws {
+        isLoading = true
         defer { isLoading = false }
         
         do {
-            isLoading = true
             let clubNames = try await appEnvironment.supabaseConnection.listMyRunClubs()
             var clubs: [RunClub] = []
             
@@ -86,26 +52,9 @@ class GroupTabViewModel: ObservableObject {
             }
             
             runClubs = clubs
+            errorMessage = nil
         } catch {
             errorMessage = "Failed to fetch run clubs: \(error.localizedDescription)"
-            throw error
-        }
-    }
-    
-    func deleteRunClub(appEnvironment: AppEnvironment, clubName: String) async throws {
-        defer { isLoading = false }
-        
-        do {
-            isLoading = true
-            try await appEnvironment.supabaseConnection.deleteRunClub(name: clubName)
-            // Refresh the list after deletion
-            try await fetchRunClubs(appEnvironment: appEnvironment)
-            if selectedClub?.name == clubName {
-                selectedClub = nil
-                clubMembers = []
-            }
-        } catch {
-            errorMessage = "Failed to delete run club: \(error.localizedDescription)"
             throw error
         }
     }
@@ -131,6 +80,7 @@ class GroupTabViewModel: ObservableObject {
                 
                 if !Task.isCancelled {
                     runClubs = clubs
+                    errorMessage = nil
                 }
             } catch {
                 if !Task.isCancelled {
@@ -141,17 +91,6 @@ class GroupTabViewModel: ObservableObject {
             if !Task.isCancelled {
                 isLoading = false
             }
-        }
-    }
-    
-    func fetchClubMembers(appEnvironment: AppEnvironment, clubName: String) async {
-        defer { isLoading = false }
-        
-        do {
-            isLoading = true
-            clubMembers = try await appEnvironment.supabaseConnection.listRunClubMembers(name: clubName)
-        } catch {
-            errorMessage = "Failed to fetch club members: \(error.localizedDescription)"
         }
     }
 }

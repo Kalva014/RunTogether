@@ -4,7 +4,6 @@
 //
 //  Created by Kenneth Alvarez on 9/22/25.
 //
-
 import SwiftUI
 
 struct GroupTabView: View {
@@ -15,7 +14,6 @@ struct GroupTabView: View {
     @State private var newClubName = ""
     @State private var newClubDescription = ""
     @State private var isSearching = false
-    @State private var showDeleteConfirmation = false
     
     init() {
         _viewModel = StateObject(wrappedValue: GroupTabViewModel())
@@ -29,119 +27,35 @@ struct GroupTabView: View {
                         .scaleEffect(1.5)
                         .padding()
                 } else if let error = viewModel.errorMessage {
-                    Text("Error: \(error)")
-                        .foregroundColor(.red)
-                        .padding()
+                    VStack(spacing: 16) {
+                        Text("Error: \(error)")
+                            .foregroundColor(.red)
+                            .padding()
+                        
+                        Button("Retry") {
+                            Task {
+                                try? await viewModel.fetchRunClubs(appEnvironment: appEnvironment)
+                            }
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 }
                 
                 List {
-                    if let selectedClub = viewModel.selectedClub {
-                        // Club detail view
-                        Section(header: Text("Club Details")) {
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text(selectedClub.name)
-                                    .font(.title2)
-                                    .bold()
+                    ForEach(viewModel.runClubs) { club in
+                        NavigationLink(destination: GroupDetailView(club: club)) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(club.name)
+                                    .font(.headline)
                                 
-                                if let description = selectedClub.description, !description.isEmpty {
+                                if let description = club.description, !description.isEmpty {
                                     Text(description)
-                                        .font(.body)
+                                        .font(.subheadline)
                                         .foregroundColor(.secondary)
-                                }
-                                
-                                if !viewModel.clubMembers.isEmpty {
-                                    VStack(alignment: .leading, spacing: 5) {
-                                        Text("Members (\(viewModel.clubMembers.count))")
-                                            .font(.headline)
-                                            .padding(.top, 8)
-                                        
-                                        ForEach(viewModel.clubMembers.prefix(10), id: \.self) { member in
-                                            Text("• \(member)")
-                                        }
-                                        
-                                        if viewModel.clubMembers.count > 10 {
-                                            Text("and \(viewModel.clubMembers.count - 10) more...")
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-                                }
-                                
-                                VStack(spacing: 10) {
-                                    // Show delete button if current user is the owner
-                                    if let currentUser = appEnvironment.appUser, 
-                                       selectedClub.owner?.uuidString == currentUser.id {
-                                        Button(action: {
-                                            showDeleteConfirmation = true
-                                        }) {
-                                            Text("Delete Club")
-                                                .foregroundColor(.white)
-                                                .frame(maxWidth: .infinity)
-                                                .padding()
-                                                .background(Color.red)
-                                                .cornerRadius(10)
-                                        }
-                                        .buttonStyle(.borderless)
-                                        .padding(.top, 10)
-                                        .alert("Delete Club", isPresented: $showDeleteConfirmation) {
-                                            Button("Delete", role: .destructive) {
-                                                Task {
-                                                    do {
-                                                        try await viewModel.deleteRunClub(appEnvironment: appEnvironment, clubName: selectedClub.name)
-                                                    } catch {
-                                                        // Error handled by viewModel
-                                                    }
-                                                }
-                                            }
-                                            Button("Cancel", role: .cancel) {}
-                                        } message: {
-                                            Text("Are you sure you want to delete this club? This action cannot be undone.")
-                                        }
-                                    } else {
-                                        // Show leave button for non-owners
-                                        Button(action: {
-                                            Task {
-                                                do {
-                                                    try await viewModel.leaveRunClub(appEnvironment: appEnvironment, clubName: selectedClub.name)
-                                                } catch {
-                                                    // Error handled by viewModel
-                                                }
-                                            }
-                                        }) {
-                                            Text("Leave Club")
-                                                .foregroundColor(.red)
-                                                .frame(maxWidth: .infinity, alignment: .center)
-                                        }
-                                        .buttonStyle(.bordered)
-                                        .padding(.top, 10)
-                                    }
+                                        .lineLimit(2)
                                 }
                             }
-                            .padding(.vertical, 8)
-                        }
-                    } else {
-                        // List of clubs
-                        ForEach(viewModel.runClubs) { club in
-                            Button(action: {
-                                viewModel.selectedClub = club
-                                Task {
-                                    await viewModel.fetchClubMembers(appEnvironment: appEnvironment, clubName: club.name)
-                                }
-                            }) {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(club.name)
-                                        .font(.headline)
-                                    
-                                    if let description = club.description, !description.isEmpty {
-                                        Text(description)
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
-                                            .lineLimit(2)
-                                    }
-                                }
-                                .padding(.vertical, 8)
-                            }
-                            .buttonStyle(PlainButtonStyle())
+                            .padding(.vertical, 4)
                         }
                     }
                 }
@@ -163,19 +77,14 @@ struct GroupTabView: View {
                         }
                     }
                 }
+                .refreshable {
+                    try? await viewModel.fetchRunClubs(appEnvironment: appEnvironment)
+                }
                 .navigationTitle("Run Clubs")
                 .toolbar {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button(action: { showingCreateClub = true }) {
                             Image(systemName: "plus")
-                        }
-                    }
-                    
-                    if viewModel.selectedClub != nil {
-                        ToolbarItem(placement: .navigationBarLeading) {
-                            Button("Back") {
-                                viewModel.selectedClub = nil
-                            }
                         }
                     }
                 }
