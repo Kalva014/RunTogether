@@ -29,36 +29,40 @@ class RunTabViewModel: ObservableObject {
         }
     }
     
-    func joinRandomRace(appEnvironment: AppEnvironment, mode: String, start_time: Date, distance: Double) async {
+    func joinRandomRace(appEnvironment: AppEnvironment, mode: String, start_time: Date, distance: Double) async -> UUID? {
         do {
-            try await appEnvironment.supabaseConnection.joinRandomRace(mode: mode, start_time: start_time, maxParticipants: 50, distance: distance)
+            let raceId = try await appEnvironment.supabaseConnection.joinRandomRace(
+                mode: mode,
+                start_time: start_time,
+                maxParticipants: 50,
+                distance: distance
+            )
+            return raceId
         } catch {
             print("Error joining random race: \(error.localizedDescription)")
+            return nil
         }
     }
     
     // Wait until the race start time is within 1 minute
+    @MainActor
     func waitUntilStartTime(startTime: Date) async {
-        await MainActor.run {
-            self.isWaiting = true
-            countdownTimer?.invalidate()
-        }
+        self.isWaiting = true
 
-        countdownTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] timer in
-            guard let self = self else { return }
+        while true {
             let now = Date()
             let diff = startTime.timeIntervalSince(now)
-            
-            Task { @MainActor in
-                if diff <= 60 {
-                    self.isWaiting = false
-                    timer.invalidate()
-                } else {
-                    let minutes = Int(diff / 60)
-                    let seconds = Int(diff.truncatingRemainder(dividingBy: 60))
-                    self.countdownText = String(format: "Starts in %02dm %02ds", minutes, seconds)
-                }
+
+            if diff <= 60 {
+                self.isWaiting = false
+                break
+            } else {
+                let minutes = Int(diff / 60)
+                let seconds = Int(diff.truncatingRemainder(dividingBy: 60))
+                self.countdownText = String(format: "Starts in %02dm %02ds", minutes, seconds)
             }
+
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
         }
     }
 

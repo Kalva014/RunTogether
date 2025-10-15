@@ -173,15 +173,23 @@ struct RunTabView: View {
                             Task {
                                 activeMode = "Race"
                                 await MainActor.run { viewModel.isWaiting = true }
-                                await viewModel.joinRandomRace(
+                                
+                                // Join or create random race
+                                if let raceId = await viewModel.joinRandomRace(
                                     appEnvironment: appEnvironment,
                                     mode: "Race",
                                     start_time: selectedTime,
                                     distance: distanceConversion[selectedDistance] ?? 5000.0
-                                )
-                                await MainActor.run {
-                                    viewModel.isWaiting = false
-                                    navigateToRunning = true
+                                ) {
+                                    // Wait until race start time
+                                    await viewModel.waitUntilStartTime(startTime: selectedTime)
+                                    
+                                    await MainActor.run {
+                                        viewModel.isWaiting = false
+                                        navigateToRunning = true
+                                    }
+                                } else {
+                                    await MainActor.run { viewModel.isWaiting = false }
                                 }
                             }
                         }
@@ -196,15 +204,21 @@ struct RunTabView: View {
                         Task {
                             activeMode = "Casual"
                             await MainActor.run { viewModel.isWaiting = true }
-                            await viewModel.joinRandomRace(
+
+                            if let raceId = await viewModel.joinRandomRace(
                                 appEnvironment: appEnvironment,
                                 mode: "Casual",
                                 start_time: selectedTime,
                                 distance: distanceConversion[selectedDistance] ?? 5000.0
-                            )
-                            await MainActor.run {
-                                viewModel.isWaiting = false
-                                navigateToRunning = true
+                            ) {
+                                await viewModel.waitUntilStartTime(startTime: selectedTime)
+                                
+                                await MainActor.run {
+                                    viewModel.isWaiting = false
+                                    navigateToRunning = true
+                                }
+                            } else {
+                                await MainActor.run { viewModel.isWaiting = false }
                             }
                         }
                     }
@@ -221,18 +235,57 @@ struct RunTabView: View {
             // --- Waiting Overlay ---
             .overlay {
                 if viewModel.isWaiting {
-                    VStack {
+                    VStack(spacing: 20) {
+                        // Back button
+                        HStack {
+                            Button(action: {
+                                Task { await MainActor.run { viewModel.isWaiting = false } }
+                            }) {
+                                Label("Back", systemImage: "chevron.left")
+                            }
+                            .padding()
+                            
+                            Spacer()
+                        }
+                        
+                        Spacer()
+                        
                         ProgressView()
                             .scaleEffect(1.5)
-                            .padding(.bottom)
+                        
                         Text(viewModel.countdownText)
                             .font(.headline)
+                        
+                        // Race ID display if available
+                        if let raceId = createdRaceId {
+                            VStack(spacing: 5) {
+                                Text("Race ID:")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                HStack {
+                                    Text(raceId.uuidString)
+                                        .font(.caption2)
+                                        .multilineTextAlignment(.center)
+                                        .lineLimit(2)
+                                    Button(action: {
+                                        UIPasteboard.general.string = raceId.uuidString
+                                    }) {
+                                        Label("Copy", systemImage: "doc.on.doc")
+                                            .labelStyle(.iconOnly)
+                                    }
+                                }
+                                .padding(.horizontal)
+                            }
+                        }
+                        
+                        Spacer()
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(.ultraThinMaterial)
                     .ignoresSafeArea()
                 }
             }
+
             
             // --- Navigation to RunningView ---
             .background(

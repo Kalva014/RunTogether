@@ -325,7 +325,7 @@ class SupabaseConnection: ObservableObject {
         }
     }
     
-    func joinRandomRace(mode: String, start_time: Date, maxParticipants: Int, distance: Double) async throws {
+    func joinRandomRace(mode: String, start_time: Date, maxParticipants: Int, distance: Double) async throws -> UUID? {
         do {
             // Fetch open races matching the mode and distance
             let races: [Race] = try await self.client
@@ -342,9 +342,9 @@ class SupabaseConnection: ObservableObject {
                 guard let raceId = race.id else { continue }
                 
                 do {
-                    let _ = try await joinRaceWithCap(raceId: raceId, maxParticipants: maxParticipants)
+                    let joinedId = try await joinRaceWithCap(raceId: raceId, maxParticipants: maxParticipants)
                     print("✅ Joined race \(raceId) with distance \(distance)m")
-                    return
+                    return joinedId
                 } catch {
                     print("⚠️ Could not join race \(raceId): \(error)")
                     continue
@@ -353,7 +353,8 @@ class SupabaseConnection: ObservableObject {
             
             // If no suitable race found, create a new one
             print("ℹ️ No open race found for distance \(distance)m — creating a new one.")
-            _ = try await createRace(mode: mode, start_time: start_time, distance: distance)
+            let newRace = try await createRace(mode: mode, start_time: start_time, distance: distance)
+            return newRace?.id
         }
         catch {
             print("❌ Error joining random race: \(error)")
