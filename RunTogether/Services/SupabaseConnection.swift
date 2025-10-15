@@ -210,41 +210,41 @@ class SupabaseConnection: ObservableObject {
     }
     
     // MARK: - Multiplayer Methods
-    func createRace(name: String, mode: String, start_time: Date) async throws -> Race {
-        guard let userId = self.currentUserId else {
-            throw NSError(domain: "SupabaseConnection", code: 401,
-                          userInfo: [NSLocalizedDescriptionKey: "User not signed in"])
-        }
-        
+    // CREATE RACE
+    func createRace(name: String? = nil, mode: String, start_time: Date, distance: Double) async throws -> Race? {
         do {
-            // Create race
-            let brandNewRace = Race(
-                id: nil,
-                name: name,
-                mode: mode,
-                start_time: start_time,
-                end_time: nil
-            )
+            guard let userId = self.currentUserId else {
+                throw NSError(domain: "SupabaseConnection", code: 401,
+                              userInfo: [NSLocalizedDescriptionKey: "User not signed in"])
+            }
             
-            let newRace: Race = try await self.client
+            let brandNewRace = Race(id: nil, name: name, mode: mode, start_time: start_time, end_time: nil, distance: distance)
+            
+            // Decode as array, then get first
+            let newRaces: [Race] = try await client
                 .from("Races")
                 .insert(brandNewRace)
                 .select()
                 .execute()
                 .value
             
-            // Add user as participant
+            guard let newRace = newRaces.first else {
+                throw NSError(domain: "SupabaseConnection", code: 500,
+                              userInfo: [NSLocalizedDescriptionKey: "Failed to create race"])
+            }
+            
             let participant = RaceParticipants(
-                id: newRace.id!,
+                id: nil,
                 created_at: Date(),
                 user_id: userId,
                 finish_time: nil,
                 distance_covered: 0.0,
                 place: nil,
-                average_pace: nil
+                average_pace: nil,
+                race_id: newRace.id!
             )
             
-            _ = try await self.client
+            _ = try await client
                 .from("Race_Participants")
                 .insert(participant)
                 .execute()
@@ -252,10 +252,11 @@ class SupabaseConnection: ObservableObject {
             return newRace
         }
         catch {
-            print("Could not create race: \(error)")
-            throw error
+            print("Error creating a new race \(error)")
+            return nil
         }
     }
+
     
     func leaveRace() async {
         if let currentChannel = currentChannel {
@@ -264,68 +265,132 @@ class SupabaseConnection: ObservableObject {
         }
     }
     
-    func joinRaceWithCap(raceId: UUID, maxParticipants: Int) async throws {
+    func joinRaceWithCap(raceId: UUID, maxParticipants: Int) async throws -> UUID? {
         guard let userId = self.currentUserId else {
             throw NSError(domain: "SupabaseConnection", code: 401,
                           userInfo: [NSLocalizedDescriptionKey: "User not signed in"])
         }
         
         do {
-            let currNumParticipants = try await self.client
+            // 1️⃣ Check if the user is already in this race
+            let existingParticipants: [RaceParticipants] = try await client
+                .from("Race_Participants")
+                .select()
+                .eq("race_id", value: raceId.uuidString)
+                .eq("user_id", value: userId.uuidString)
+                .execute()
+                .value
+            
+            if let _ = existingParticipants.first {
+                print("User \(userId) is already in race \(raceId)")
+                return raceId // Skip creating another participant
+            }
+            
+            // 2️⃣ Check current number of participants
+            let currNumParticipants = try await client
                 .from("Race_Participants")
                 .select("race_id", head: true, count: CountOption.exact)
                 .eq("race_id", value: raceId.uuidString)
                 .execute()
                 .count
             
-            guard currNumParticipants! < maxParticipants else {
+            guard let currNum = currNumParticipants, currNum < maxParticipants else {
                 print("Race full")
-                return
+                return nil
             }
             
+            // 3️⃣ Create a new participant
             let participant = RaceParticipants(
-                id: raceId,
+                id: nil,
                 created_at: Date(),
                 user_id: userId,
                 finish_time: nil,
                 distance_covered: 0.0,
                 place: nil,
-                average_pace: nil
+                average_pace: nil,
+                race_id: raceId
             )
             
-            _ = try await self.client
+            _ = try await client
                 .from("Race_Participants")
                 .insert(participant)
                 .execute()
             
             print("Joined race \(raceId)")
+            return raceId
         }
         catch {
             print("Error joining race: \(error)")
+            return nil
         }
     }
     
-    func joinRandomRace(mode: String, start_time: Date, maxParticipants: Int) async throws {
+    func joinRandomRace(mode: String, start_time: Date, maxParticipants: Int, distance: Double) async throws {
         do {
+            // Fetch open races matching the mode and distance
             let races: [Race] = try await self.client
                 .from("Races")
                 .select()
+                .eq("mode", value: mode)
+                .eq("distance", value: distance)
                 .is("end_time", value: nil)
                 .execute()
                 .value
             
+            // Try to join an existing race that isn’t full
             for race in races.shuffled() {
+                guard let raceId = race.id else { continue }
+                
                 do {
-                    try await joinRaceWithCap(raceId: race.id!, maxParticipants: maxParticipants)
-                    print("Joined race \(race.id!)")
+                    let _ = try await joinRaceWithCap(raceId: raceId, maxParticipants: maxParticipants)
+                    print("✅ Joined race \(raceId) with distance \(distance)m")
                     return
-                } catch { continue }
+                } catch {
+                    print("⚠️ Could not join race \(raceId): \(error)")
+                    continue
+                }
             }
             
-            _ = try await createRace(name: "", mode: mode, start_time: start_time)
+            // If no suitable race found, create a new one
+            print("ℹ️ No open race found for distance \(distance)m — creating a new one.")
+            _ = try await createRace(mode: mode, start_time: start_time, distance: distance)
         }
         catch {
-            print("Error joining random race: \(error)")
+            print("❌ Error joining random race: \(error)")
+            throw error
+        }
+    }
+    
+    func getRaceDetails(raceId: UUID) async throws -> Race {
+        do {
+            return try await self.client
+                .from("Races")
+                .select()
+                .eq("id", value: raceId)
+                .single() // 👈 ensures only one result is returned
+                .execute()
+                .value
+        }
+        catch {
+            print("Error getting race details: \(error)")
+            throw error
+        }
+    }
+    
+    func getUpcomingRaces(limit: Int = 5) async throws -> [Race] {
+        do {
+            let now = Date()
+            
+            return try await self.client
+                .from("Races")
+                .select()
+                .gt("start_time", value: now)     // 👈 Only races that haven’t started yet
+                .order("start_time", ascending: true) // 👈 Soonest races first
+                .limit(limit)                     // 👈 Limit to latest 5
+                .execute()
+                .value
+        } catch {
+            print("Error fetching upcoming races: \(error)")
             throw error
         }
     }
