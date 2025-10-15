@@ -19,6 +19,13 @@ struct HomeView: View {
                 }
                 .environmentObject(appEnvironment)
             
+            FriendsTabView()
+                .tabItem {
+                    Image(systemName: "person.fill")
+                    Text("Friends")
+                }
+                .environmentObject(appEnvironment)
+            
             LeaderboardTabView()
                 .tabItem {
                     Image(systemName: "trophy.fill")
