@@ -76,4 +76,24 @@ class RunTabViewModel: ObservableObject {
             print("Error waiting for race start: \(error.localizedDescription)")
         }
     }
+    
+    @MainActor
+    func cancelRace(appEnvironment: AppEnvironment, raceId: UUID) async {
+        do {
+            try await appEnvironment.supabaseConnection.cancelRace(raceId: raceId)
+            print("✅ Race \(raceId) cancelled successfully")
+        } catch {
+            print("❌ Failed to cancel race: \(error)")
+        }
+    }
+
+    @MainActor
+    func leaveRace(appEnvironment: AppEnvironment, raceId: UUID) async {
+        do {
+            try await appEnvironment.supabaseConnection.leaveRace(raceId: raceId)
+            print("👋 Left race \(raceId)")
+        } catch {
+            print("❌ Failed to leave race: \(error)")
+        }
+    }
 }

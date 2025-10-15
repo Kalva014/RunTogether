@@ -236,33 +236,36 @@ struct RunTabView: View {
             .overlay {
                 if viewModel.isWaiting {
                     VStack(spacing: 20) {
-                        // Back button
+                        // --- Top Bar with Back Button ---
                         HStack {
                             Button(action: {
                                 Task { await MainActor.run { viewModel.isWaiting = false } }
                             }) {
                                 Label("Back", systemImage: "chevron.left")
                             }
-                            .padding()
+                            .padding(.leading)
                             
                             Spacer()
                         }
                         
                         Spacer()
                         
+                        // --- Progress Indicator ---
                         ProgressView()
                             .scaleEffect(1.5)
+                            .padding(.bottom, 8)
                         
+                        // --- Countdown Timer Text ---
                         Text(viewModel.countdownText)
                             .font(.headline)
                         
-                        // Race ID display if available
+                        // --- Race ID Display (if available) ---
                         if let raceId = createdRaceId {
                             VStack(spacing: 5) {
                                 Text("Race ID:")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
-                                HStack {
+                                HStack(spacing: 6) {
                                     Text(raceId.uuidString)
                                         .font(.caption2)
                                         .multilineTextAlignment(.center)
@@ -277,6 +280,31 @@ struct RunTabView: View {
                                 .padding(.horizontal)
                             }
                         }
+                        
+                        // --- Cancel / Leave Race Button ---
+                        Button {
+                            Task {
+                                if let raceId = createdRaceId {
+                                    await viewModel.cancelRace(appEnvironment: appEnvironment, raceId: raceId)
+                                } else if !raceIdInput.isEmpty, let joinedRaceId = UUID(uuidString: raceIdInput) {
+                                    await viewModel.leaveRace(appEnvironment: appEnvironment, raceId: joinedRaceId)
+                                }
+                                
+                                await MainActor.run {
+                                    viewModel.isWaiting = false
+                                    createdRaceId = nil
+                                    raceIdInput = ""
+                                }
+                            }
+                        } label: {
+                            Text(createdRaceId != nil ? "Cancel Race" : "Leave Race")
+                                .font(.body.weight(.semibold))
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                        .padding(.horizontal, 40)
+                        .padding(.top, 10)
                         
                         Spacer()
                     }

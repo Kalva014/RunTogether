@@ -396,6 +396,59 @@ class SupabaseConnection: ObservableObject {
         }
     }
     
+    /// Removes the current user from a specific race
+    func leaveRace(raceId: UUID) async throws {
+        guard let userId = self.currentUserId else {
+            throw NSError(domain: "SupabaseConnection", code: 401,
+                          userInfo: [NSLocalizedDescriptionKey: "User not signed in"])
+        }
+        
+        do {
+            print("🚪 Leaving race \(raceId) for user \(userId)")
+            
+            // Delete only this user's participant record
+            _ = try await client
+                .from("Race_Participants")
+                .delete()
+                .eq("race_id", value: raceId.uuidString)
+                .eq("user_id", value: userId.uuidString)
+                .execute()
+            
+            print("✅ User \(userId) removed from Race_Participants for race \(raceId)")
+        }
+        catch {
+            print("❌ Error leaving race: \(error)")
+            throw error
+        }
+    }
+    
+    /// Cancels the race (used by the creator) — deletes race + all participants
+    func cancelRace(raceId: UUID) async throws {
+        do {
+            print("🗑️ Cancelling race \(raceId) — deleting race and all participants...")
+            
+            // First delete participants
+            _ = try await client
+                .from("Race_Participants")
+                .delete()
+                .eq("race_id", value: raceId.uuidString)
+                .execute()
+            
+            // Then delete the race itself
+            _ = try await client
+                .from("Races")
+                .delete()
+                .eq("id", value: raceId.uuidString)
+                .execute()
+            
+            print("✅ Successfully deleted race \(raceId) and all its participants")
+        }
+        catch {
+            print("❌ Error cancelling race: \(error)")
+            throw error
+        }
+    }
+    
     // MARK: - Race Updates
     func sendRaceUpdate(raceId: UUID, distance: Double, pace: Double) async throws {
         guard let userId = self.currentUserId else { return }
