@@ -722,6 +722,26 @@ class SupabaseConnection: ObservableObject {
             return []
         }
     }
+    
+    // Checks if user is in a race or not
+    func getActiveRaceForUser(userId: UUID) async throws -> UUID? {
+        do {
+            let results: [RaceParticipants] = try await client
+                .from("Race_Participants")
+                .select("*") // ✅ select all fields
+                .eq("user_id", value: userId.uuidString)
+                .is("finish_time", value: nil)
+                .limit(1)
+                .execute()
+                .value
+
+            return results.first?.race_id
+        } catch {
+            print("❌ Error fetching active race for user \(userId): \(error)")
+            return nil
+        }
+    }
+
 
     // MARK: - Run Club Management
     /// Create a new run club

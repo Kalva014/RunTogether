@@ -1,16 +1,15 @@
-//
-//  FriendsTabViewModel.swift
-//  RunTogether
-//
-//  Created by Kenneth Alvarez on 10/15/25.
-//
-
 import Foundation
 import SwiftUI
 
 @MainActor
 class FriendsTabViewModel: ObservableObject {
-    @Published var friends: [Profile] = []
+    struct FriendDisplay: Identifiable {
+        let id: UUID
+        let username: String
+        let activeRaceId: UUID?
+    }
+    
+    @Published var friends: [FriendDisplay] = []
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
     
@@ -24,16 +23,18 @@ class FriendsTabViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            // 1️⃣ Get list of friend UUIDs from Supabase
             let friendIds = try await appEnvironment.supabaseConnection.listFriends()
+            var loadedFriends: [FriendDisplay] = []
             
-            var loadedFriends: [Profile] = []
-            
-            // 2️⃣ Fetch each friend's profile
             for friendId in friendIds {
-                if let profile = try? await appEnvironment.supabaseConnection.getProfileByUsername(username: friendId) {
-                    loadedFriends.append(profile)
-                }
+                // Get the profile info
+                guard let profile = try? await appEnvironment.supabaseConnection.getProfileByUsername(username: friendId) else { continue }
+                
+                // Get active race if any
+                let raceId = try? await appEnvironment.supabaseConnection.getActiveRaceForUser(userId: profile.id)
+                
+                let display = FriendDisplay(id: profile.id, username: profile.username, activeRaceId: raceId)
+                loadedFriends.append(display)
             }
             
             self.friends = loadedFriends

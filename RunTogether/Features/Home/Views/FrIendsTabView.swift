@@ -4,7 +4,6 @@
 //
 //  Created by Kenneth Alvarez on 10/15/25.
 //
-
 import SwiftUI
 
 struct FriendsTabView: View {
@@ -32,7 +31,7 @@ struct FriendsTabView: View {
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 12) {
-                            ForEach(viewModel.friends, id: \.id) { friend in
+                            ForEach(viewModel.friends) { friend in
                                 NavigationLink(destination: ProfileDetailView(username: friend.username)) {
                                     FriendRow(friend: friend)
                                 }
@@ -57,38 +56,64 @@ struct FriendsTabView: View {
 }
 
 struct FriendRow: View {
-    let friend: Profile
+    let friend: FriendsTabViewModel.FriendDisplay
+    
+    @State private var copied = false
     
     var body: some View {
-        HStack(spacing: 16) {
-            // Avatar (use first letter of username)
-            ZStack {
-                Circle()
-                    .fill(Color.blue.opacity(0.2))
-                    .frame(width: 44, height: 44)
-                Text(String(friend.username.prefix(1)).uppercased())
-                    .font(.headline)
-                    .foregroundColor(.blue)
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 16) {
+                ZStack {
+                    Circle()
+                        .fill(Color.blue.opacity(0.2))
+                        .frame(width: 44, height: 44)
+                    Text(String(friend.username.prefix(1)).uppercased())
+                        .font(.headline)
+                        .foregroundColor(.blue)
+                }
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(friend.username)
+                        .font(.headline)
+                    
+                    if let raceId = friend.activeRaceId {
+                        HStack(spacing: 6) {
+                            Text("🏁 In race:")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            Text(raceId.uuidString.prefix(8) + "…")
+                                .font(.caption2)
+                                .foregroundColor(.blue)
+                            
+                            Button(action: {
+                                UIPasteboard.general.string = raceId.uuidString
+                                withAnimation { copied = true }
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                                    withAnimation { copied = false }
+                                }
+                            }) {
+                                Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc")
+                                    .font(.caption)
+                                    .foregroundColor(copied ? .green : .secondary)
+                            }
+                        }
+                    }
+                }
+                
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .foregroundColor(.secondary)
+                    .font(.caption)
             }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(friend.username)
-                    .font(.headline)
-            }
-            
-            Spacer()
-            
-            Image(systemName: "chevron.right")
-                .foregroundColor(.secondary)
-                .font(.caption)
         }
         .padding()
         .background(Color(.systemBackground))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
-        .contentShape(Rectangle())
     }
 }
+
 
 #Preview {
     let supabaseConnection = SupabaseConnection()
