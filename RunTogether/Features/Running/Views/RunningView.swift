@@ -28,7 +28,7 @@ struct RunningView: View {
         self.useMiles = useMiles
         self.raceId = raceId
                 
-        _viewModel = StateObject(wrappedValue: RunningViewModel(mode: mode, isTreadmillMode: isTreadmillMode, distance: distance, useMiles: useMiles))
+        _viewModel = StateObject(wrappedValue: RunningViewModel(mode: mode, isTreadmillMode: isTreadmillMode, distance: distance, useMiles: useMiles, raceId: raceId))
     }
 
 
@@ -71,6 +71,21 @@ struct RunningView: View {
                 height: UIScreen.main.bounds.height
             )
             viewModel.raceScene.scaleMode = .fill
+            
+            // Start realtime updates if we have supabaseconnection and raceid
+            Task {
+                if appEnvironment.supabaseConnection != nil {
+                    await viewModel.startRealtime(appEnvironment: appEnvironment)
+                } else {
+                    // fallback: no supabase connection available
+                    print("No SupabaseConnection available in environment.")
+                }
+            }
+        }
+        .onDisappear {
+            Task {
+                await viewModel.stopRealtime(appEnvironment: appEnvironment)
+            }
         }
         .background(
             NavigationLink(isActive: $navigateToResults) {

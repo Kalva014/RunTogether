@@ -26,12 +26,14 @@ class RunningViewModel: ObservableObject {
     var mode: String = "Race"
     var isTreadmillMode: Bool = false
     var distance: String = "5K"
+    var raceId: UUID?
     
-    init(mode: String, isTreadmillMode: Bool, distance: String, useMiles: Bool) {
+    init(mode: String, isTreadmillMode: Bool, distance: String, useMiles: Bool,  raceId: UUID? = nil) {
         self.mode = mode
         self.isTreadmillMode = isTreadmillMode
         self.distance = distance
         self.useMiles = useMiles
+        self.raceId = raceId
         
         if !isTreadmillMode {
             self.locationManager = LocationManager()
@@ -64,8 +66,24 @@ class RunningViewModel: ObservableObject {
         
         requestHealthKitAuthorization()
     }
+    
+    // MARK: - Adding multiplayer functionality
+    func startRealtime(appEnvironment: AppEnvironment) async {
+        guard let raceId = raceId else {
+            print("No raceId provided — realtime not started")
+            return
+        }
+        
+        // Subscribe to channel
+        await appEnvironment.supabaseConnection.subscribeToRaceUpdates(raceId: raceId)
+    }
+    
+    func stopRealtime(appEnvironment: AppEnvironment) async {
+        // Unsubscribe from realtime channel
+        await appEnvironment.supabaseConnection.leaveRace()
+    }
 
-      
+    // MARK: - Other functions
     private func requestHealthKitAuthorization() {
         healthManager.requestAuthorization { [weak self] success in
             if success {
