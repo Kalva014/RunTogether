@@ -113,8 +113,8 @@ class RunningViewModel: ObservableObject {
             switch distance {
             case "5K": return 5000.0
             case "10K": return 10000.0
-            case "Half Marathon(21.1K)": return 21100.0
-            case "Full Marathon(42.2K)": return 42200.0
+            case "Half Marathon (21.1K)": return 21100.0
+            case "Full Marathon (42.2K)": return 42200.0
             default: return 5000.0
             }
         }

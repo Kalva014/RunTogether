@@ -2,8 +2,6 @@
 //  RunTabView.swift
 //  RunTogether
 //
-//  Updated by ChatGPT on 10/14/25.
-//
 import SwiftUI
 
 struct RunTabView: View {
@@ -22,11 +20,11 @@ struct RunTabView: View {
     
     var distanceOptions: [String] {
         useMiles
-            ? ["1 Mile", "3.1 Miles", "6.2 Miles", "13.1 Miles", "26.2 Miles"]
-            : ["5K", "10K", "Half Marathon (21.1K)", "Full Marathon (42.2K)"]
+        ? ["1 Mile", "3.1 Miles", "6.2 Miles", "13.1 Miles", "26.2 Miles"]
+        : ["5K", "10K", "Half Marathon (21.1K)", "Full Marathon (42.2K)"]
     }
     
-    var distanceConversion = [
+    var distanceConversion: [String: Double] = [
         "1 Mile": 1609.34,
         "3.1 Miles": 4989.0,
         "6.2 Miles": 9979.0,
@@ -35,302 +33,289 @@ struct RunTabView: View {
         "5K": 5000.0,
         "10K": 10000.0,
         "Half Marathon (21.1K)": 21100.0,
-        "Full Marathon (42.2K)": 42200.0,
+        "Full Marathon (42.2K)": 42200.0
     ]
     
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
+                    userInfoSection
+                    startTimeSection
+                    unitsSection
+                    distanceSection
                     
-                    // --- User Info ---
-                    if let appUser = appEnvironment.appUser {
-                        VStack(spacing: 5) {
-                            Text("Welcome, \(appUser.username)!")
-                                .font(.title2)
-                                .bold()
-                            Text("Email: \(appUser.email)")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.top)
-                    }
-                    
-                    // --- Start Time ---
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Select Start Time")
-                            .font(.headline)
-                        DatePicker("", selection: $selectedTime, displayedComponents: .hourAndMinute)
-                            .datePickerStyle(.wheel)
-                    }
-                    .padding(.horizontal)
-                    
-                    // --- Units ---
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Units")
-                            .font(.headline)
-                        Picker("Units", selection: $useMiles) {
-                            Text("Kilometers").tag(false)
-                            Text("Miles").tag(true)
-                        }
-                        .pickerStyle(.segmented)
-                    }
-                    .padding(.horizontal)
-                    
-                    // --- Distance ---
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Distance")
-                            .font(.headline)
-                        Picker("Distance", selection: $selectedDistance) {
-                            ForEach(distanceOptions, id: \.self) { distance in
-                                Text(distance)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                    }
-                    .padding(.horizontal)
-                    
-                    // --- Treadmill Mode ---
                     Toggle("Treadmill Mode", isOn: $isTreadmillMode)
                         .padding(.horizontal)
                     
-                    Divider().padding(.vertical)
+                    Divider()
                     
-                    // --- Race Creation Section ---
-                    VStack(spacing: 12) {
-                        Button("Create Race") {
-                            Task {
-                                activeMode = "Race"
-                                if let raceId = await viewModel.createRace(
-                                    appEnvironment: appEnvironment,
-                                    mode: "Race",
-                                    start_time: selectedTime,
-                                    distance: distanceConversion[selectedDistance] ?? 5000.0
-                                ) {
-                                    createdRaceId = raceId
-                                    UIPasteboard.general.string = raceId.uuidString
-                                    print("Race ID copied to clipboard: \(raceId)")
-                                    
-                                    await MainActor.run { viewModel.isWaiting = true }
-                                    await viewModel.waitUntilStartTime(startTime: selectedTime)
-                                    await MainActor.run {
-                                        viewModel.isWaiting = false
-                                        navigateToRunning = true
-                                    }
-                                }
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                        
-                        if let raceId = createdRaceId {
-                            VStack(spacing: 5) {
-                                Text("Race ID:")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                HStack {
-                                    Text(raceId.uuidString)
-                                        .font(.caption2)
-                                        .multilineTextAlignment(.center)
-                                        .lineLimit(2)
-                                    Button(action: {
-                                        UIPasteboard.general.string = raceId.uuidString
-                                    }) {
-                                        Label("Copy", systemImage: "doc.on.doc")
-                                            .labelStyle(.iconOnly)
-                                    }
-                                }
-                            }
-                        }
-                        
-                        VStack(spacing: 8) {
-                            TextField("Paste Race ID to Join", text: $raceIdInput)
-                                .textFieldStyle(.roundedBorder)
-                                .padding(.horizontal)
-                            
-                            Button("Join Race") {
-                                Task {
-                                    activeMode = "Race"
-                                    if let joinedRace = await viewModel.joinSpecificRace(
-                                        appEnvironment: appEnvironment,
-                                        raceId: raceIdInput
-                                    ) {
-                                        await MainActor.run { viewModel.isWaiting = true }
-                                        await viewModel.waitForRaceToStart(
-                                            appEnvironment: appEnvironment,
-                                            raceId: joinedRace.uuidString
-                                        )
-                                        await MainActor.run {
-                                            viewModel.isWaiting = false
-                                            navigateToRunning = true
-                                        }
-                                    }
-                                }
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
-                        
-                        Button("Join Random Race") {
-                            Task {
-                                activeMode = "Race"
-                                await MainActor.run { viewModel.isWaiting = true }
-                                
-                                // Join or create random race
-                                if let raceId = await viewModel.joinRandomRace(
-                                    appEnvironment: appEnvironment,
-                                    mode: "Race",
-                                    start_time: selectedTime,
-                                    distance: distanceConversion[selectedDistance] ?? 5000.0
-                                ) {
-                                    // Wait until race start time
-                                    await viewModel.waitUntilStartTime(startTime: selectedTime)
-                                    
-                                    await MainActor.run {
-                                        viewModel.isWaiting = false
-                                        navigateToRunning = true
-                                    }
-                                } else {
-                                    await MainActor.run { viewModel.isWaiting = false }
-                                }
-                            }
-                        }
-                        .buttonStyle(.bordered)
-                    }
-                    .padding(.horizontal)
+                    raceCreationSection
+                    Divider()
                     
-                    Divider().padding(.vertical)
-                    
-                    // --- Casual Run Section ---
-                    Button("Start Casual Group Run") {
-                        Task {
-                            activeMode = "Casual"
-                            await MainActor.run { viewModel.isWaiting = true }
-
-                            if let raceId = await viewModel.joinRandomRace(
-                                appEnvironment: appEnvironment,
-                                mode: "Casual",
-                                start_time: selectedTime,
-                                distance: distanceConversion[selectedDistance] ?? 5000.0
-                            ) {
-                                await viewModel.waitUntilStartTime(startTime: selectedTime)
-                                
-                                await MainActor.run {
-                                    viewModel.isWaiting = false
-                                    navigateToRunning = true
-                                }
-                            } else {
-                                await MainActor.run { viewModel.isWaiting = false }
-                            }
-                        }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .padding(.bottom, 40)
+                    casualRunSection
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top)
             }
             .scrollDismissesKeyboard(.interactively)
-            .safeAreaInset(edge: .bottom) { Color.clear.frame(height: 10) }
             .background(Color(.systemGroupedBackground))
-            
-            // --- Waiting Overlay ---
-            .overlay {
-                if viewModel.isWaiting {
-                    VStack(spacing: 20) {
-                        // --- Top Bar with Back Button ---
-                        HStack {
-                            Button(action: {
-                                Task { await MainActor.run { viewModel.isWaiting = false } }
-                            }) {
-                                Label("Back", systemImage: "chevron.left")
-                            }
-                            .padding(.leading)
-                            
-                            Spacer()
-                        }
-                        
-                        Spacer()
-                        
-                        // --- Progress Indicator ---
-                        ProgressView()
-                            .scaleEffect(1.5)
-                            .padding(.bottom, 8)
-                        
-                        // --- Countdown Timer Text ---
-                        Text(viewModel.countdownText)
-                            .font(.headline)
-                        
-                        // --- Race ID Display (if available) ---
-                        if let raceId = createdRaceId {
-                            VStack(spacing: 5) {
-                                Text("Race ID:")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                HStack(spacing: 6) {
-                                    Text(raceId.uuidString)
-                                        .font(.caption2)
-                                        .multilineTextAlignment(.center)
-                                        .lineLimit(2)
-                                    Button(action: {
-                                        UIPasteboard.general.string = raceId.uuidString
-                                    }) {
-                                        Label("Copy", systemImage: "doc.on.doc")
-                                            .labelStyle(.iconOnly)
-                                    }
-                                }
-                                .padding(.horizontal)
-                            }
-                        }
-                        
-                        // --- Cancel / Leave Race Button ---
-                        Button {
-                            Task {
-                                if let raceId = createdRaceId {
-                                    await viewModel.cancelRace(appEnvironment: appEnvironment, raceId: raceId)
-                                } else if !raceIdInput.isEmpty, let joinedRaceId = UUID(uuidString: raceIdInput) {
-                                    await viewModel.leaveRace(appEnvironment: appEnvironment, raceId: joinedRaceId)
-                                }
-                                
-                                await MainActor.run {
-                                    viewModel.isWaiting = false
-                                    createdRaceId = nil
-                                    raceIdInput = ""
-                                }
-                            }
-                        } label: {
-                            Text(createdRaceId != nil ? "Cancel Race" : "Leave Race")
-                                .font(.body.weight(.semibold))
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.red)
-                        .padding(.horizontal, 40)
-                        .padding(.top, 10)
-                        
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(.ultraThinMaterial)
-                    .ignoresSafeArea()
-                }
-            }
-
-            
-            // --- Navigation to RunningView ---
-            .background(
-                NavigationLink(isActive: $navigateToRunning) {
-                    RunningView(
-                        mode: activeMode,
-                        isTreadmillMode: isTreadmillMode,
-                        distance: selectedDistance,
-                        useMiles: useMiles
-                    )
-                } label: { EmptyView() }
-            )
+            .overlay(waitingOverlay)
+            .background(navigationLink)
             .navigationTitle("Run Together")
             .navigationBarTitleDisplayMode(.inline)
         }
     }
 }
+
+// MARK: - Sections
+
+private extension RunTabView {
+    
+    var userInfoSection: some View {
+        Group {
+            if let user = appEnvironment.appUser {
+                VStack(spacing: 5) {
+                    Text("Welcome, \(user.username)!")
+                        .font(.title2).bold()
+                    Text("Email: \(user.email)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(.top)
+    }
+    
+    var startTimeSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Select Start Time").font(.headline)
+            DatePicker("", selection: $selectedTime, displayedComponents: .hourAndMinute)
+                .datePickerStyle(.wheel)
+        }
+        .padding(.horizontal)
+    }
+    
+    var unitsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Units").font(.headline)
+            Picker("Units", selection: $useMiles) {
+                Text("Kilometers").tag(false)
+                Text("Miles").tag(true)
+            }
+            .pickerStyle(.segmented)
+        }
+        .padding(.horizontal)
+    }
+    
+    var distanceSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Distance").font(.headline)
+            Picker("", selection: $selectedDistance) {
+                ForEach(distanceOptions, id: \.self) { Text($0) }
+            }
+            .pickerStyle(.menu)
+        }
+        .padding(.horizontal)
+    }
+}
+
+// MARK: - Race Creation Section
+
+private extension RunTabView {
+    
+    var raceCreationSection: some View {
+        VStack(spacing: 12) {
+            Button("Create Race") { Task { await handleCreateRace() }}
+                .buttonStyle(.borderedProminent)
+            
+            if let raceId = createdRaceId {
+                raceIdDisplay(raceId)
+            }
+            
+            VStack(spacing: 8) {
+                TextField("Paste Race ID to Join", text: $raceIdInput)
+                    .textFieldStyle(.roundedBorder)
+                Button("Join Race") { Task { await handleJoinSpecific() }}
+                    .buttonStyle(.borderedProminent)
+            }
+            
+            Button("Join Random Race") { Task { await handleJoinRandom() }}
+                .buttonStyle(.bordered)
+        }
+        .padding(.horizontal)
+    }
+}
+
+// MARK: - Casual Run Button
+
+private extension RunTabView {
+    
+    var casualRunSection: some View {
+        Button("Start Casual Group Run") {
+            Task { await handleCasualRun() }
+        }
+        .buttonStyle(.borderedProminent)
+        .padding(.bottom, 40)
+    }
+}
+
+// MARK: - Overlay
+
+private extension RunTabView {
+    
+    @ViewBuilder var waitingOverlay: some View {
+        if viewModel.isWaiting {
+            VStack(spacing: 20) {
+                HStack {
+                    Button("Back") { viewModel.isWaiting = false }
+                    Spacer()
+                }
+                .padding(.leading)
+                
+                Spacer()
+                ProgressView().scaleEffect(1.5)
+                Text(viewModel.countdownText).font(.headline)
+                
+                if let raceId = createdRaceId {
+                    raceIdDisplay(raceId)
+                }
+                
+                Button(createdRaceId != nil ? "Cancel Race" : "Leave Race") {
+                    Task { await handleCancel() }
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.horizontal, 40)
+                
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.ultraThinMaterial)
+            .ignoresSafeArea()
+        }
+    }
+}
+
+// MARK: - Navigation
+
+private extension RunTabView {
+    var navigationLink: some View {
+        NavigationLink(isActive: $navigateToRunning) {
+            RunningView(
+                mode: activeMode,
+                isTreadmillMode: isTreadmillMode,
+                distance: selectedDistance,
+                useMiles: useMiles,
+                raceId: createdRaceId
+            )
+            .environmentObject(appEnvironment)
+        } label: { EmptyView() }
+    }
+}
+
+// MARK: - Shared UI
+private extension RunTabView {
+    func raceIdDisplay(_ id: UUID) -> some View {
+        VStack(spacing: 5) {
+            Text("Race ID:")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            
+            HStack(spacing: 6) {
+                Text(id.uuidString)
+                    .font(.caption2)
+                    .multilineTextAlignment(.center)
+                
+                Button(action: {
+                    UIPasteboard.general.string = id.uuidString
+                }) {
+                    Image(systemName: "doc.on.doc")
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+    }
+}
+
+// MARK: - Actions
+
+private extension RunTabView {
+    
+    @MainActor
+    func handleCreateRace() async {
+        activeMode = "Race"
+        guard let id = await viewModel.createRace(
+            appEnvironment: appEnvironment,
+            mode: "Race",
+            start_time: selectedTime,
+            distance: distanceConversion[selectedDistance] ?? 5000
+        ) else { return }
+        
+        createdRaceId = id
+        UIPasteboard.general.string = id.uuidString
+        await waitForStart()
+    }
+    
+    @MainActor
+    func handleJoinSpecific() async {
+        activeMode = "Race"
+        guard let race = await viewModel.joinSpecificRace(
+            appEnvironment: appEnvironment,
+            raceId: raceIdInput
+        ) else { return }
+        
+        createdRaceId = race
+        await viewModel.waitForRaceToStart(appEnvironment: appEnvironment, raceId: race.uuidString)
+        navigateToRunning = true
+    }
+    
+    @MainActor
+    func handleJoinRandom() async {
+        activeMode = "Race"
+        guard let id = await viewModel.joinRandomRace(
+            appEnvironment: appEnvironment,
+            mode: "Race",
+            start_time: selectedTime,
+            distance: distanceConversion[selectedDistance] ?? 5000
+        ) else { return }
+        
+        createdRaceId = id
+        await waitForStart()
+    }
+    
+    @MainActor
+    func handleCasualRun() async {
+        activeMode = "Casual"
+        guard let id = await viewModel.joinRandomRace(
+            appEnvironment: appEnvironment,
+            mode: "Casual",
+            start_time: selectedTime,
+            distance: distanceConversion[selectedDistance] ?? 5000
+        ) else { return }
+        
+        createdRaceId = id
+        await waitForStart()
+    }
+    
+    @MainActor
+    func handleCancel() async {
+        if let id = createdRaceId {
+            await viewModel.cancelRace(appEnvironment: appEnvironment, raceId: id)
+        }
+        createdRaceId = nil
+        raceIdInput = ""
+        viewModel.isWaiting = false
+    }
+    
+    @MainActor
+    func waitForStart() async {
+        viewModel.isWaiting = true
+        await viewModel.waitUntilStartTime(startTime: selectedTime)
+        viewModel.isWaiting = false
+        navigateToRunning = true
+    }
+}
+
 
 #Preview {
     RunTabView()

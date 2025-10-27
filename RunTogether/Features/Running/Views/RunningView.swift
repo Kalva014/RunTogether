@@ -12,18 +12,22 @@ struct RunningView: View {
     let isTreadmillMode: Bool
     let distance: String
     var useMiles: Bool
+    let raceId: UUID?
+    
+    @EnvironmentObject var appEnvironment: AppEnvironment
     
     @StateObject private var viewModel: RunningViewModel
     @State private var isHeartPulsing = false
     @State private var navigateToResults = false
     @Environment(\.dismiss) private var dismiss
     
-    init(mode: String, isTreadmillMode: Bool, distance: String, useMiles: Bool) {
+    init(mode: String, isTreadmillMode: Bool, distance: String, useMiles: Bool, raceId: UUID? = nil) {
         self.mode = mode
         self.isTreadmillMode = isTreadmillMode
         self.distance = distance
         self.useMiles = useMiles
-        
+        self.raceId = raceId
+                
         _viewModel = StateObject(wrappedValue: RunningViewModel(mode: mode, isTreadmillMode: isTreadmillMode, distance: distance, useMiles: useMiles))
     }
 

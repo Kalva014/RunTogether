@@ -477,19 +477,18 @@ class SupabaseConnection: ObservableObject {
         }
     }
     
-    func subscribeToRaceUpdates(raceId: UUID) {
+    func subscribeToRaceUpdates(raceId: UUID) async {
         let channel = client.channel("race_updates:\(raceId)")
         self.currentChannel = channel
         
         let insertions = channel.postgresChange(
             InsertAction.self,
             schema: "public",
-            table: "Race_Updates"
+            table: "Race_Updates",
+            filter: "race_id=eq.\(raceId.uuidString)"
         )
         
-        Task { [weak self] in
-            guard let self = self else { return }
-            
+        do {
             try await channel.subscribeWithError()
             
             for await insert in insertions {
@@ -501,6 +500,9 @@ class SupabaseConnection: ObservableObject {
             // If we exit the loop, it means the channel was closed/disconnected
             guard let userId = self.currentUserId else { return }
             try? await self.markParticipantDisconnected(raceId: raceId, userId: userId)
+        }
+        catch {
+            print("Error subscribing to race updates: \(error)")
         }
     }
     
@@ -598,7 +600,6 @@ class SupabaseConnection: ObservableObject {
             print("Error marking participant finished: \(error)")
         }
     }
-
     
     
     // MARK: - Friend Management
@@ -967,110 +968,110 @@ class SupabaseConnection: ObservableObject {
         }
     }
 
-    // MARK: - Live Post Race Chat
-    @Published var currentMessages: [RaceChatMessage] = []
-    private var chatChannel: RealtimeChannelV2?
-
-    /// Send a chat message
-    func sendMessage(raceId: UUID, userId: UUID, username: String?, message: String) async throws {
-        do {
-            let chat = RaceChatMessage(
-                id: nil,
-                race_id: raceId,
-                user_id: userId,
-                username: username,
-                message: message,
-                created_at: nil
-            )
-            
-            _ = try await client
-                .from("Race_Chat")
-                .insert(chat)
-                .execute()
-        }
-        catch {
-            print("Error sending chat message: \(error)")
-        }
-    }
-    
-    /// Subscribe to live chat messages for a race
-    func subscribeToRaceChat(raceId: UUID) {
-        chatChannel = client.channel("race_chat:\(raceId)")
-        guard let channel = chatChannel else { return }
-        
-        Task {
-            let stream = channel.postgresChange(
-                InsertAction.self,
-                schema: "public",
-                table: "Race_Chat"
-            )
-            
-            try await channel.subscribeWithError()
-            
-            for await change in stream {
-                if let newMessage = try? JSONDecoder().decode(RaceChatMessage.self, from: JSONSerialization.data(withJSONObject: change.record)) {
-                    DispatchQueue.main.async {
-                        self.currentMessages.append(newMessage)
-                    }
-                }
-            }
-        }
-    }
-    
-    /// Unsubscribe from chat and cleanup if no participants left
-    func leaveRaceChat(raceId: UUID, userId: UUID) async {
-        if let channel = chatChannel {
-            await channel.unsubscribe()
-            self.chatChannel = nil
-        }
-        
-        // Check if there are remaining participants in the race
-        do {
-            let participants: [RaceParticipants] = try await client
-                .from("Race_Participants")
-                .select()
-                .eq("race_id", value: raceId.uuidString)
-                .execute()
-                .value ?? []
-            
-            if participants.isEmpty {
-                // Delete all chat messages for the race
-                try await client
-                    .from("Race_Chat")
-                    .delete()
-                    .eq("race_id", value: raceId.uuidString)
-                    .execute()
-                
-                print("All chat messages for race \(raceId) deleted.")
-            }
-        } catch {
-            print("Error checking participants or cleaning up chat: \(error)")
-        }
-    }
-    
-    /// Fetch past messages for a race
-    func fetchMessages(raceId: UUID) async throws -> [RaceChatMessage] {
-        do {
-            let messages: [RaceChatMessage] = try await client
-                .from("Race_Chat")
-                .select()
-                .eq("race_id", value: raceId.uuidString)
-                .order("created_at", ascending: true)
-                .execute()
-                .value ?? []
-            
-            DispatchQueue.main.async {
-                self.currentMessages = messages
-            }
-            
-            return messages
-        }
-        catch {
-            print("Error fetching messages: \(error)")
-            throw error
-        }
-    }
-    
+//    // MARK: - Live Post Race Chat
+//    @Published var currentMessages: [RaceChatMessage] = []
+//    private var chatChannel: RealtimeChannelV2?
+//
+//    /// Send a chat message
+//    func sendMessage(raceId: UUID, userId: UUID, username: String?, message: String) async throws {
+//        do {
+//            let chat = RaceChatMessage(
+//                id: nil,
+//                race_id: raceId,
+//                user_id: userId,
+//                username: username,
+//                message: message,
+//                created_at: nil
+//            )
+//            
+//            _ = try await client
+//                .from("Race_Chat")
+//                .insert(chat)
+//                .execute()
+//        }
+//        catch {
+//            print("Error sending chat message: \(error)")
+//        }
+//    }
+//    
+//    /// Subscribe to live chat messages for a race
+//    func subscribeToRaceChat(raceId: UUID) {
+//        chatChannel = client.channel("race_chat:\(raceId)")
+//        guard let channel = chatChannel else { return }
+//        
+//        Task {
+//            let stream = channel.postgresChange(
+//                InsertAction.self,
+//                schema: "public",
+//                table: "Race_Chat"
+//            )
+//            
+//            try await channel.subscribeWithError()
+//            
+//            for await change in stream {
+//                if let newMessage = try? JSONDecoder().decode(RaceChatMessage.self, from: JSONSerialization.data(withJSONObject: change.record)) {
+//                    DispatchQueue.main.async {
+//                        self.currentMessages.append(newMessage)
+//                    }
+//                }
+//            }
+//        }
+//    }
+//    
+//    /// Unsubscribe from chat and cleanup if no participants left
+//    func leaveRaceChat(raceId: UUID, userId: UUID) async {
+//        if let channel = chatChannel {
+//            await channel.unsubscribe()
+//            self.chatChannel = nil
+//        }
+//        
+//        // Check if there are remaining participants in the race
+//        do {
+//            let participants: [RaceParticipants] = try await client
+//                .from("Race_Participants")
+//                .select()
+//                .eq("race_id", value: raceId.uuidString)
+//                .execute()
+//                .value ?? []
+//            
+//            if participants.isEmpty {
+//                // Delete all chat messages for the race
+//                try await client
+//                    .from("Race_Chat")
+//                    .delete()
+//                    .eq("race_id", value: raceId.uuidString)
+//                    .execute()
+//                
+//                print("All chat messages for race \(raceId) deleted.")
+//            }
+//        } catch {
+//            print("Error checking participants or cleaning up chat: \(error)")
+//        }
+//    }
+//    
+//    /// Fetch past messages for a race
+//    func fetchMessages(raceId: UUID) async throws -> [RaceChatMessage] {
+//        do {
+//            let messages: [RaceChatMessage] = try await client
+//                .from("Race_Chat")
+//                .select()
+//                .eq("race_id", value: raceId.uuidString)
+//                .order("created_at", ascending: true)
+//                .execute()
+//                .value ?? []
+//            
+//            DispatchQueue.main.async {
+//                self.currentMessages = messages
+//            }
+//            
+//            return messages
+//        }
+//        catch {
+//            print("Error fetching messages: \(error)")
+//            throw error
+//        }
+//    }
+//    
     
     // MARK: - Global Leaderboard Management
     /// Fetch the top N users on the global leaderboard
