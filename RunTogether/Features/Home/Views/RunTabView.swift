@@ -197,21 +197,33 @@ private extension RunTabView {
 }
 
 // MARK: - Navigation
-
 private extension RunTabView {
     var navigationLink: some View {
-        NavigationLink(isActive: $navigateToRunning) {
-            RunningView(
-                mode: activeMode,
-                isTreadmillMode: isTreadmillMode,
-                distance: selectedDistance,
-                useMiles: useMiles,
-                raceId: createdRaceId
-            )
-            .environmentObject(appEnvironment)
-        } label: { EmptyView() }
+        NavigationLink(
+            isActive: $navigateToRunning
+        ) {
+            Group {
+                if let raceId = createdRaceId {
+                    RunningView(
+                        mode: activeMode,
+                        isTreadmillMode: isTreadmillMode,
+                        distance: selectedDistance,
+                        useMiles: useMiles,
+                        raceId: raceId
+                    )
+                    .environmentObject(appEnvironment)
+                } else {
+                    EmptyView()
+                }
+            }
+        } label: {
+            EmptyView()
+        }
+        .hidden()
     }
 }
+
+
 
 // MARK: - Shared UI
 private extension RunTabView {
@@ -251,6 +263,8 @@ private extension RunTabView {
             distance: distanceConversion[selectedDistance] ?? 5000
         ) else { return }
         
+        print("NAVIGATING — activeMode: \(activeMode), raceId: \(String(describing: id))")
+
         createdRaceId = id
         UIPasteboard.general.string = id.uuidString
         await waitForStart()
@@ -279,6 +293,9 @@ private extension RunTabView {
             distance: distanceConversion[selectedDistance] ?? 5000
         ) else { return }
         
+        print("NAVIGATING — activeMode: \(activeMode), raceId: \(String(describing: id))")
+
+        
         createdRaceId = id
         await waitForStart()
     }
@@ -292,6 +309,9 @@ private extension RunTabView {
             start_time: selectedTime,
             distance: distanceConversion[selectedDistance] ?? 5000
         ) else { return }
+        
+        print("NAVIGATING — activeMode: \(activeMode), raceId: \(String(describing: id))")
+
         
         createdRaceId = id
         await waitForStart()
