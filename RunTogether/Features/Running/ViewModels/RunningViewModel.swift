@@ -28,7 +28,10 @@ class RunningViewModel: ObservableObject {
     var distance: String = "5K"
     var raceId: UUID?
     
-    init(mode: String, isTreadmillMode: Bool, distance: String, useMiles: Bool,  raceId: UUID? = nil) {
+    // MARK: - Local → Realtime Updates
+    private var broadcastTimer: Timer?
+    
+    init(mode: String, isTreadmillMode: Bool, distance: String, useMiles: Bool, raceId: UUID? = nil) {
         self.mode = mode
         self.isTreadmillMode = isTreadmillMode
         self.distance = distance
@@ -56,7 +59,7 @@ class RunningViewModel: ObservableObject {
         
         let meters = convertDistanceToMeters(distance)
         self.raceScene.raceDistance = meters
-        
+         
         // After full initialization, we can use Combine & HealthKit
         self.raceScene.objectWillChange
             .sink { [weak self] _ in
@@ -68,21 +71,62 @@ class RunningViewModel: ObservableObject {
     }
     
     // MARK: - Adding multiplayer functionality
+    // Passes appenvironment for the race scene
+    func setAppEnvironment(appEnvironment: AppEnvironment) {
+        raceScene.appEnvironment = appEnvironment
+    }
+    
     func startRealtime(appEnvironment: AppEnvironment) async {
-        guard let raceId = raceId else {
+        guard let raceId = self.raceId else {
             print("No raceId provided — realtime not started")
             return
         }
         
-        // Subscribe to channel
-        await appEnvironment.supabaseConnection.subscribeToRaceUpdates(raceId: raceId)
-    }
-    
-    func stopRealtime(appEnvironment: AppEnvironment) async {
-        // Unsubscribe from realtime channel
-        await appEnvironment.supabaseConnection.leaveRace()
+        // Start the scene's realtime updates
+        await raceScene.startRealtimeUpdates(raceId: raceId, appEnvironment: appEnvironment)
+        
+        // Start broadcasting our own position
+        startBroadcastingPlayerUpdates(appEnvironment: appEnvironment)
     }
 
+    func stopRealtime(appEnvironment: AppEnvironment) async {
+        // Stop scene realtime
+        raceScene.stopRealtimeUpdates()
+        
+        // Stop broadcasting
+        broadcastTimer?.invalidate()
+        broadcastTimer = nil
+        
+        // Unsubscribe from channel
+        await appEnvironment.supabaseConnection.unsubscribeFromRaceBroadcasts()
+    }
+    
+    private func startBroadcastingPlayerUpdates(appEnvironment: AppEnvironment) {
+        broadcastTimer?.invalidate()
+        
+        broadcastTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            Task {
+                guard let self = self,
+                      let raceId = self.raceId else { return }
+                
+                let distance = Double(self.raceScene.playerDistance)
+                let paceString = self.playerPace
+                
+                // Convert pace string (e.g. "5:42") to total minutes
+                let paceComponents = paceString.split(separator: ":").compactMap { Double($0) }
+                let paceMinutes = (paceComponents.count == 2)
+                    ? paceComponents[0] + paceComponents[1] / 60
+                    : 0.0
+                
+                await appEnvironment.supabaseConnection.broadcastRaceUpdate(
+                    raceId: raceId,
+                    distance: distance,
+                    pace: paceMinutes
+                )
+            }
+        }
+    }
+    
     // MARK: - Other functions
     private func requestHealthKitAuthorization() {
         healthManager.requestAuthorization { [weak self] success in

@@ -450,61 +450,123 @@ class SupabaseConnection: ObservableObject {
     }
     
     // MARK: - Race Updates
-    func sendRaceUpdate(raceId: UUID, distance: Double, pace: Double) async throws {
-        guard let userId = self.currentUserId else { return }
-        
-        do {
-            let update = RaceUpdates(
-                id: nil,
-                created_at: Date(),
-                race_id: raceId,
-                user_id: userId,
-                current_distance: distance,
-                current_pace: pace
-            )
-            
-            _ = try await self.client
-                .from("Race_Updates")
-                .insert(update)
-                .execute()
-            
-            // Automatically check if the race is finished
-            try await checkIfRaceFinished(raceId: raceId)
-        }
-        catch {
-            print("Error sending race update: \(error)")
-            throw error
-        }
+    /// Broadcasts a low-latency update to other participants.
+    func broadcastRaceUpdate(raceId: UUID, distance: Double, pace: Double) async {
+       guard let userId = self.currentUserId else { return }
+       
+       do {
+           let channel = try await getRaceChannel(raceId: raceId)
+           
+           try await channel.broadcast(
+               event: "update",
+               message: [
+                "user_id": .string(userId.uuidString),
+                   "distance": .double(distance),
+                   "pace": .double(pace),
+                   "timestamp": .string(ISO8601DateFormatter().string(from: Date()))
+               ]
+           )
+       } catch {
+           print("Error broadcasting race update: \(error)")
+       }
     }
+       
+   /// Sends a durable update to the Race_Updates table for history or stats.
+   func persistRaceUpdate(raceId: UUID, distance: Double, pace: Double) async throws {
+       guard let userId = self.currentUserId else { return }
+       
+       let update = RaceUpdates(
+           id: nil,
+           created_at: Date(),
+           race_id: raceId,
+           user_id: userId,
+           current_distance: distance,
+           current_pace: pace
+       )
+       
+       do {
+           _ = try await self.client
+               .from("Race_Updates")
+               .insert(update)
+               .execute()
+       } catch {
+           print("Error persisting race update: \(error)")
+           throw error
+       }
+   }
+   
+//   /// Subscribes to low-latency broadcast updates for the current race.
+//   func subscribeToRaceBroadcasts(raceId: UUID) async {
+//       do {
+//           let channel = try await getRaceChannel(raceId: raceId)
+//           self.currentChannel = channel
+//           
+//           // Listen for broadcast events
+//           let stream = await channel.broadcastStream(event: "update")
+//           
+//           try await channel.subscribeWithError()
+//           print("✅ Subscribed to race broadcasts for \(raceId)")
+//           
+//           for await message in stream {
+//               // message is a JSONObject ([String: AnyJSON])
+//               let userId = message["user_id"]?.stringValue ?? "unknown"
+//               let distance = message["distance"]?.doubleValue ?? 0
+//               let pace = message["pace"]?.doubleValue ?? 0
+//               let timestamp = message["timestamp"]?.stringValue ?? ""
+//               
+//               print("📡 Live update → user: \(userId), distance: \(distance), pace: \(pace), at \(timestamp)")
+//               
+//               // TODO: push to your UI state
+//           }
+//           
+//       } catch {
+//           print("Error subscribing to race broadcasts: \(error)")
+//       }
+//   }
     
-    func subscribeToRaceUpdates(raceId: UUID) async {
-        let channel = client.channel("race_updates:\(raceId)")
-        self.currentChannel = channel
-        
-        let insertions = channel.postgresChange(
-            InsertAction.self,
-            schema: "public",
-            table: "Race_Updates",
-            filter: "race_id=eq.\(raceId.uuidString)"
-        )
-        
+    /// Subscribes to low-latency broadcast updates for the current race.
+    func subscribeToRaceBroadcasts(raceId: UUID) async {
         do {
+            let channel = try await getRaceChannel(raceId: raceId)
+            self.currentChannel = channel
+            
+            // Subscribe to the channel first
             try await channel.subscribeWithError()
+            print("✅ Subscribed to race broadcasts for \(raceId)")
             
-            for await insert in insertions {
-                print("Race update received: \(insert.record)")
-                // Update UI state here
-                // You can access the inserted record data through insert.record
-            }
+            // Note: The stream processing should happen in the scene
+            // where it can access MainActor context properly
             
-            // If we exit the loop, it means the channel was closed/disconnected
-            guard let userId = self.currentUserId else { return }
-            try? await self.markParticipantDisconnected(raceId: raceId, userId: userId)
-        }
-        catch {
-            print("Error subscribing to race updates: \(error)")
+        } catch {
+            print("Error subscribing to race broadcasts: \(error)")
         }
     }
+   
+   /// Closes the broadcast channel cleanly when the race ends.
+   func unsubscribeFromRaceBroadcasts() async {
+       guard let channel = currentChannel else { return }
+       do {
+           try await channel.unsubscribe()
+           print("🛑 Unsubscribed from race broadcasts")
+       } catch {
+           print("Error unsubscribing: \(error)")
+       }
+   }
+   
+   /// Reuses or creates a broadcast channel for the race.
+   private func getRaceChannel(raceId: UUID) async throws -> RealtimeChannelV2 {
+       if let channel = currentChannel {
+           return channel
+       }
+       
+       let channel = client.channel("race:\(raceId)") {
+           $0.broadcast.acknowledgeBroadcasts = true
+       }
+       
+       self.currentChannel = channel
+       return channel
+   }
+
     
     // MARK: - Race Completion
     func checkIfRaceFinished(raceId: UUID) async throws {

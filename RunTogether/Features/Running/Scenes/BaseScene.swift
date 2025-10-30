@@ -24,6 +24,7 @@ class BaseRunningScene: SKScene, ObservableObject {
     var raceDistance: CGFloat = 5000.0 // Default 5K
     var currentPlayerSpeed: CLLocationSpeed = 0.0
     var useMiles: Bool = true
+    var appEnvironment: AppEnvironment?
     
     // MARK: - Scene Objects
     var playerRunner: SKNode!
@@ -50,6 +51,31 @@ class BaseRunningScene: SKScene, ObservableObject {
     // MARK: - Combine
     var cancellables = Set<AnyCancellable>()
     
+    // MARK: - Realtime Multiplayer State
+    var realtimeOpponents: [UUID: RealtimeOpponentData] = [:] // Track all opponents by userId
+    var isRealtimeEnabled: Bool = false
+
+    struct RealtimeOpponentData {
+        let userId: UUID
+        let username: String
+        var distance: Double
+        var paceMinutes: Double // pace in minutes per unit (km or mi)
+        var speedMps: Double // speed in meters per second
+        var lastUpdateTime: Date
+        
+        // Check if data is stale (no update in 10 seconds)
+        var isStale: Bool {
+            Date().timeIntervalSince(lastUpdateTime) > 10
+        }
+        
+        // Convert pace to formatted string
+        func paceString() -> String {
+            let minutes = Int(paceMinutes)
+            let seconds = Int((paceMinutes * 60).truncatingRemainder(dividingBy: 60))
+            return String(format: "%d:%02d", minutes, seconds)
+        }
+    }
+    
     // MARK: - Lifecycle
     override init(size: CGSize) {
         super.init(size: size)
@@ -66,7 +92,7 @@ class BaseRunningScene: SKScene, ObservableObject {
         setupBackground()
         setupGround()
         setupPlayerRunner()
-        setupOpponentRunners()
+//        setupOpponentRunners()
         setupFinishLine()
         
         startTime = CACurrentMediaTime()
@@ -99,37 +125,37 @@ class BaseRunningScene: SKScene, ObservableObject {
     }
     
     private func setupPlayerRunner() {
-        playerRunner = createRunner(name: "Ken", nationality: "UnitedStatesFlag", isPlayer: true)
+        playerRunner = createRunner(name: "You", nationality: "UnitedStatesFlag", isPlayer: true)
         let runnerY = -frame.height / 2.5 + (frame.height * 0.2)
         playerRunner.position = CGPoint(x: 0, y: runnerY)
         addChild(playerRunner)
     }
-    
-    private func setupOpponentRunners() {
-        let opponent1 = createRunner(name: "Bre", nationality: "CanadaFlag")
-        otherRunnersNames.append("Bre")
-        opponent1.position = CGPoint(x: -100, y: 100)
-        addChild(opponent1)
-        otherRunners.append(opponent1)
-        
-        let opponent2 = createRunner(name: "John", nationality: "JapanFlag")
-        otherRunnersNames.append("John")
-        opponent2.position = CGPoint(x: 100, y: 200)
-        addChild(opponent2)
-        otherRunners.append(opponent2)
-        
-        if let opponent1Sprite = opponent1.childNode(withName: "runnerSprite") {
-            let animation = runAnimation()
-            opponent1Sprite.run(animation)
-        }
-        
-        if let opponent2Sprite = opponent2.childNode(withName: "runnerSprite") {
-            let animation = runAnimation()
-            opponent2Sprite.run(animation)
-        }
-        
-        previousOpponentSpeeds = otherRunnersSpeeds
-    }
+//    
+//    private func setupOpponentRunners() {
+//        let opponent1 = createRunner(name: "Bre", nationality: "CanadaFlag")
+//        otherRunnersNames.append("Bre")
+//        opponent1.position = CGPoint(x: -100, y: 100)
+//        addChild(opponent1)
+//        otherRunners.append(opponent1)
+//        
+//        let opponent2 = createRunner(name: "John", nationality: "JapanFlag")
+//        otherRunnersNames.append("John")
+//        opponent2.position = CGPoint(x: 100, y: 200)
+//        addChild(opponent2)
+//        otherRunners.append(opponent2)
+//        
+//        if let opponent1Sprite = opponent1.childNode(withName: "runnerSprite") {
+//            let animation = runAnimation()
+//            opponent1Sprite.run(animation)
+//        }
+//        
+//        if let opponent2Sprite = opponent2.childNode(withName: "runnerSprite") {
+//            let animation = runAnimation()
+//            opponent2Sprite.run(animation)
+//        }
+//        
+//        previousOpponentSpeeds = otherRunnersSpeeds
+//    }
     
     private func setupFinishLine() {
         let finishLineNode = SKSpriteNode(imageNamed: "FinishLineBannerRed")
@@ -249,7 +275,15 @@ class BaseRunningScene: SKScene, ObservableObject {
         scrollGround(speedMps: speedMps, deltaTime: deltaTime)
         updatePlayerAnimation(speedMps: speedMps)
         checkForRaceFinish(currentTime: currentTime)
-        updateOpponents(deltaTime: deltaTime, currentTime: currentTime)
+        
+//        updateOpponents(deltaTime: deltaTime, currentTime: currentTime)
+        // In the update() method, replace the opponent update section with:
+        if isRealtimeEnabled {
+            updateOpponentsRealtime(deltaTime: deltaTime, currentTime: currentTime)
+        } else {
+            updateOpponents(deltaTime: deltaTime, currentTime: currentTime)
+        }
+        
         ensurePlayerOnTop()
         
         let paceString: String?
@@ -470,26 +504,43 @@ class BaseRunningScene: SKScene, ObservableObject {
     
     // MARK: - Abstract Methods (Override in subclasses)
     func updateLeaderboard(pace: String?) {
-        // Default implementation - override in subclasses for specific behavior
         var currRunners: [RunnerData] = []
 
+        // Add player
+        let playerSpeed = isTreadmillMode ? currentPlayerSpeed : (locationManager?.currentSpeed ?? 0)
         currRunners.append(RunnerData(
             name: "Ken",
             distance: playerDistance,
             pace: pace ?? "--:--",
-            finishTime: finishTimes[-1]
+            finishTime: finishTimes[-1],
+            speed: playerSpeed
         ))
 
-        for i in 0..<otherRunners.count {
-            currRunners.append(RunnerData(
-                name: otherRunnersNames[i],
-                distance: otherRunnersCurrentDistances[i],
-                pace: calculatePace(from: otherRunnersSpeeds[i], useMiles: useMiles),
-                finishTime: finishTimes[i]
-            ))
+        // Add AI opponents (for non-realtime mode)
+        if !isRealtimeEnabled {
+            for i in 0..<otherRunners.count {
+                currRunners.append(RunnerData(
+                    name: otherRunnersNames[i],
+                    distance: otherRunnersCurrentDistances[i],
+                    pace: calculatePace(from: otherRunnersSpeeds[i], useMiles: useMiles),
+                    finishTime: finishTimes[i],
+                    speed: Double(otherRunnersSpeeds[i])
+                ))
+            }
+        } else {
+            // Add realtime opponents
+            for (userId, opponent) in realtimeOpponents where !opponent.isStale {
+                currRunners.append(RunnerData(
+                    name: opponent.username,
+                    distance: CGFloat(opponent.distance),
+                    pace: opponent.paceString(),
+                    finishTime: nil, // Realtime opponents don't have finish times yet
+                    speed: opponent.speedMps
+                ))
+            }
         }
 
-        // Default sorting by distance (can be overridden)
+        // Default sorting by distance (can be overridden in subclasses)
         leaderboard = currRunners.sorted {
             if let t1 = $0.finishTime, let t2 = $1.finishTime {
                 return t1 < t2
@@ -499,6 +550,159 @@ class BaseRunningScene: SKScene, ObservableObject {
                 return false
             } else {
                 return $0.distance > $1.distance
+            }
+        }
+    }
+    
+    // MARK: - Realtime Methods
+
+    /// Start listening to realtime updates for this race
+    func startRealtimeUpdates(raceId: UUID, appEnvironment: AppEnvironment) async {
+        isRealtimeEnabled = true
+        
+        // Subscribe to the race channel
+        await appEnvironment.supabaseConnection.subscribeToRaceBroadcasts(raceId: raceId)
+        
+        // Start processing incoming messages
+        Task { @MainActor in
+            await processRealtimeMessages(appEnvironment: appEnvironment)
+        }
+    }
+
+    /// Process incoming broadcast messages
+    private func processRealtimeMessages(appEnvironment: AppEnvironment) async {
+        guard let channel = appEnvironment.supabaseConnection.currentChannel else { return }
+        
+        let stream = await channel.broadcastStream(event: "update")
+        
+        for await message in stream {
+            guard let userIdString = message["user_id"]?.stringValue,
+                  let userId = UUID(uuidString: userIdString),
+                  userId != appEnvironment.supabaseConnection.currentUserId else {
+                continue // Skip our own messages
+            }
+            
+            let distance = message["distance"]?.doubleValue ?? 0
+            let pace = message["pace"]?.doubleValue ?? 0
+            
+            // Update or create opponent data
+            if realtimeOpponents[userId] != nil {
+                realtimeOpponents[userId]?.distance = distance
+                realtimeOpponents[userId]?.paceMinutes = pace
+                realtimeOpponents[userId]?.lastUpdateTime = Date()
+            } else {
+                // Fetch username for new opponent
+                Task {
+                    if let profile = try? await appEnvironment.supabaseConnection.getProfileById(userId: userId) {
+                        realtimeOpponents[userId] = RealtimeOpponentData(
+                            userId: userId,
+                            username: profile.username ?? "Unknown",
+                            distance: distance,
+                            paceMinutes: pace,
+                            speedMps: pace > 0 ? 1000 / (pace * 60) : 0, // or calculate speed here
+                            lastUpdateTime: Date()
+                        )
+                        
+                        // Add visual runner if needed
+                        await syncRealtimeOpponentsToScene()
+                    }
+                }
+            }
+        }
+    }
+
+    /// Sync realtime opponent data to visible runners on screen
+    @MainActor
+    private func syncRealtimeOpponentsToScene() {
+        // Remove stale opponents
+        realtimeOpponents = realtimeOpponents.filter { !$0.value.isStale }
+        
+        let activeOpponents = Array(realtimeOpponents.values)
+        
+        // Update existing runners or create new ones
+        while otherRunners.count < activeOpponents.count && otherRunners.count < 10 {
+            let index = otherRunners.count
+            let opponent = activeOpponents[index]
+            
+            let runnerNode = createRunner(
+                name: opponent.username,
+                nationality: "UnitedStatesFlag" // Could be dynamic based on profile
+            )
+            runnerNode.position = CGPoint(x: 0, y: 100 + CGFloat(index) * 50)
+            addChild(runnerNode)
+            otherRunners.append(runnerNode)
+            otherRunnersNames.append(opponent.username)
+            otherRunnersCurrentDistances.append(CGFloat(opponent.distance))
+            otherRunnersSpeeds.append(CGFloat(opponent.paceMinutes > 0 ? 1000 / (opponent.paceMinutes * 60) : 0))
+            
+            if let sprite = runnerNode.childNode(withName: "runnerSprite") {
+                sprite.run(runAnimation())
+            }
+        }
+        
+        // Update distances and speeds for existing opponents
+        for (index, opponent) in activeOpponents.prefix(otherRunners.count).enumerated() {
+            otherRunnersCurrentDistances[index] = CGFloat(opponent.distance)
+            
+            // Convert pace (min/unit) to speed (m/s)
+            let speedMps = opponent.paceMinutes > 0 ? 1000 / (opponent.paceMinutes * 60) : 0
+            otherRunnersSpeeds[index] = CGFloat(speedMps)
+            otherRunnersNames[index] = opponent.username
+        }
+    }
+
+    /// Stop realtime updates when leaving race
+    func stopRealtimeUpdates() {
+        isRealtimeEnabled = false
+        realtimeOpponents.removeAll()
+    }
+
+    // MARK: - Update existing update() method
+
+    // Replace the updateOpponents section in your update() method with this:
+    private func updateOpponentsRealtime(deltaTime: TimeInterval, currentTime: TimeInterval) {
+        // First sync any new realtime data
+        if isRealtimeEnabled {
+            Task { @MainActor in
+                await syncRealtimeOpponentsToScene()
+            }
+        }
+        
+        // Then update visual positions (same as before)
+        for i in 0..<otherRunners.count {
+            let runnerNode = otherRunners[i]
+            let runnerSprite = runnerNode.childNode(withName: "runnerSprite")!
+            
+            let runnerDistance = otherRunnersCurrentDistances[i]
+            let delta = runnerDistance - playerDistance
+            
+            runnerNode.isHidden = runnerDistance >= raceDistance || delta <= -50 || delta > 500
+            
+            if !runnerNode.isHidden {
+                let baseY = -frame.height / 2.5 + (frame.height * 0.2)
+                let maxVisibleDelta: CGFloat = 500
+                let trackWidth: CGFloat = frame.width * 0.8
+                let progress = min(delta / maxVisibleDelta, 1.0)
+                let offsetX = progress * trackWidth - (trackWidth / 2)
+                let laneSpacing: CGFloat = 80
+                let laneOffset = CGFloat(i - otherRunners.count / 2) * laneSpacing
+                
+                runnerNode.position = CGPoint(x: offsetX + laneOffset, y: baseY)
+                
+                let shrinkStrength: CGFloat = 1.0
+                let scaleFactor = max(0.2, 1.0 - (delta / maxVisibleDelta) * shrinkStrength)
+                runnerNode.setScale(scaleFactor)
+                
+                let newSpeed = otherRunnersSpeeds[i]
+                if previousOpponentSpeeds[i] != newSpeed {
+                    runnerSprite.removeAllActions()
+                    runnerSprite.run(runAnimation(speedMultiplier: newSpeed / 3.0))
+                    previousOpponentSpeeds[i] = newSpeed
+                }
+            }
+            
+            if runnerDistance >= raceDistance && finishTimes[i] == nil {
+                finishTimes[i] = currentTime - (startTime ?? currentTime)
             }
         }
     }

@@ -4,7 +4,6 @@
 //
 //  Created by Kenneth Alvarez on 8/27/25.
 //
-
 import SpriteKit
 import CoreLocation
 
@@ -24,20 +23,38 @@ class CasualScene: BaseRunningScene {
     override func updateLeaderboard(pace: String?) {
         var currRunners: [RunnerData] = []
 
+        // Add player
+        let playerSpeed = isTreadmillMode ? currentPlayerSpeed : (locationManager?.currentSpeed ?? 0)
         currRunners.append(RunnerData(
             name: "Ken",
             distance: playerDistance,
             pace: pace ?? "--:--",
-            finishTime: finishTimes[-1]
+            finishTime: finishTimes[-1],
+            speed: playerSpeed
         ))
 
-        for i in 0..<otherRunners.count {
-            currRunners.append(RunnerData(
-                name: otherRunnersNames[i],
-                distance: otherRunnersCurrentDistances[i],
-                pace: calculatePace(from: otherRunnersSpeeds[i], useMiles: useMiles),
-                finishTime: finishTimes[i]
-            ))
+        // Add AI opponents (for non-realtime mode)
+        if !isRealtimeEnabled {
+            for i in 0..<otherRunners.count {
+                currRunners.append(RunnerData(
+                    name: otherRunnersNames[i],
+                    distance: otherRunnersCurrentDistances[i],
+                    pace: calculatePace(from: otherRunnersSpeeds[i], useMiles: useMiles),
+                    finishTime: finishTimes[i],
+                    speed: Double(otherRunnersSpeeds[i])
+                ))
+            }
+        } else {
+            // Add realtime opponents
+            for (userId, opponent) in realtimeOpponents where !opponent.isStale {
+                currRunners.append(RunnerData(
+                    name: opponent.username,
+                    distance: CGFloat(opponent.distance),
+                    pace: opponent.paceString(),
+                    finishTime: nil,
+                    speed: opponent.speedMps
+                ))
+            }
         }
 
         // Sort by pace (faster pace = lower time = better ranking)

@@ -72,6 +72,8 @@ struct RunningView: View {
             )
             viewModel.raceScene.scaleMode = .fill
             
+            viewModel.setAppEnvironment(appEnvironment: appEnvironment)
+            
             // Start realtime updates if we have supabaseconnection and raceid
             Task {
                 if appEnvironment.supabaseConnection != nil {
