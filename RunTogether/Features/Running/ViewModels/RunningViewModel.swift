@@ -78,15 +78,21 @@ class RunningViewModel: ObservableObject {
     
     func startRealtime(appEnvironment: AppEnvironment) async {
         guard let raceId = self.raceId else {
-            print("No raceId provided — realtime not started")
+            print("❌ No raceId provided — realtime not started")
             return
         }
+        
+        print("🚀 Starting realtime for race: \(raceId)")
         
         // Start the scene's realtime updates
         await raceScene.startRealtimeUpdates(raceId: raceId, appEnvironment: appEnvironment)
         
+        print("✅ Scene realtime updates started")
+        
         // Start broadcasting our own position
         startBroadcastingPlayerUpdates(appEnvironment: appEnvironment)
+        
+        print("✅ Realtime fully initialized")
     }
 
     func stopRealtime(appEnvironment: AppEnvironment) async {
@@ -104,10 +110,15 @@ class RunningViewModel: ObservableObject {
     private func startBroadcastingPlayerUpdates(appEnvironment: AppEnvironment) {
         broadcastTimer?.invalidate()
         
+        print("📢 Starting broadcast timer for race updates")
+        
         broadcastTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             Task {
                 guard let self = self,
-                      let raceId = self.raceId else { return }
+                      let raceId = self.raceId else {
+                    print("⚠️ Cannot broadcast: missing self or raceId")
+                    return
+                }
                 
                 let distance = Double(self.raceScene.playerDistance)
                 let paceString = self.playerPace
@@ -117,6 +128,8 @@ class RunningViewModel: ObservableObject {
                 let paceMinutes = (paceComponents.count == 2)
                     ? paceComponents[0] + paceComponents[1] / 60
                     : 0.0
+                
+                print("📤 Broadcasting update: distance=\(distance)m, pace=\(paceMinutes)min")
                 
                 await appEnvironment.supabaseConnection.broadcastRaceUpdate(
                     raceId: raceId,
