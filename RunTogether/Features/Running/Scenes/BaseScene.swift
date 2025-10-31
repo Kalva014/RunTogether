@@ -608,6 +608,9 @@ class BaseRunningScene: SKScene, ObservableObject {
                 realtimeOpponents[userId]?.paceMinutes = pace
                 realtimeOpponents[userId]?.speedMps = speedMps
                 realtimeOpponents[userId]?.lastUpdateTime = Date()
+                
+                // Sync the update to the scene
+                await syncRealtimeOpponentsToScene()
             } else {
                 print("➕ New opponent detected: \(userId), fetching profile...")
                 // Fetch username for new opponent
@@ -622,6 +625,9 @@ class BaseRunningScene: SKScene, ObservableObject {
                             speedMps: speedMps,
                             lastUpdateTime: Date()
                         )
+                        
+                        // Sync the new opponent to the scene
+                        await syncRealtimeOpponentsToScene()
                     } else {
                         print("⚠️ Could not fetch profile for \(userId)")
                     }
@@ -635,15 +641,20 @@ class BaseRunningScene: SKScene, ObservableObject {
     /// Sync realtime opponent data to visible runners on screen
     @MainActor
     private func syncRealtimeOpponentsToScene() {
+        print("🔄 Syncing \(realtimeOpponents.count) realtime opponents to scene")
+        
         // Remove stale opponents
         realtimeOpponents = realtimeOpponents.filter { !$0.value.isStale }
         
         let activeOpponents = Array(realtimeOpponents.values)
+        print("📊 Active opponents after filtering stale: \(activeOpponents.count)")
         
         // Update existing runners or create new ones
         while otherRunners.count < activeOpponents.count && otherRunners.count < 10 {
             let index = otherRunners.count
             let opponent = activeOpponents[index]
+            
+            print("➕ Creating visual runner for \(opponent.username) at distance \(opponent.distance)m")
             
             let runnerNode = createRunner(
                 name: opponent.username,
@@ -654,7 +665,7 @@ class BaseRunningScene: SKScene, ObservableObject {
             otherRunners.append(runnerNode)
             otherRunnersNames.append(opponent.username)
             otherRunnersCurrentDistances.append(CGFloat(opponent.distance))
-            otherRunnersSpeeds.append(CGFloat(opponent.paceMinutes > 0 ? 1000 / (opponent.paceMinutes * 60) : 0))
+            otherRunnersSpeeds.append(CGFloat(opponent.speedMps))
             
             if let sprite = runnerNode.childNode(withName: "runnerSprite") {
                 sprite.run(runAnimation())
@@ -669,10 +680,7 @@ class BaseRunningScene: SKScene, ObservableObject {
         // Update distances and speeds for existing opponents
         for (index, opponent) in activeOpponents.prefix(otherRunners.count).enumerated() {
             otherRunnersCurrentDistances[index] = CGFloat(opponent.distance)
-            
-            // Convert pace (min/unit) to speed (m/s)
-            let speedMps = opponent.paceMinutes > 0 ? 1000 / (opponent.paceMinutes * 60) : 0
-            otherRunnersSpeeds[index] = CGFloat(speedMps)
+            otherRunnersSpeeds[index] = CGFloat(opponent.speedMps)
             otherRunnersNames[index] = opponent.username
         }
     }
