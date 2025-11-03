@@ -371,25 +371,28 @@ class BaseRunningScene: SKScene, ObservableObject {
                 // 3. Base Y = ground line for runners
                 let baseY = -frame.height / 2.5 + (frame.height * 0.2)
 
-                // 4. Map distance gap (0–1000m) → screen X position
-                let maxVisibleDelta: CGFloat = 500   // shrink fully within 500m instead of 1000m
-                let trackWidth: CGFloat = frame.width * 0.8
+                // 4. Map distance gap → screen X position (converge to center)
+                let maxVisibleDelta: CGFloat = 500
                 let progress = min(delta / maxVisibleDelta, 1.0)
-                let offsetX = progress * trackWidth - (trackWidth / 2)
-
+                
                 // 5. Stagger runners slightly left/right into "lanes"
-                let laneSpacing: CGFloat = 80
+                let laneSpacing: CGFloat = 150
                 let laneOffset = CGFloat(i - otherRunners.count / 2) * laneSpacing
+                
+                // 6. Converge towards center as they get further ahead
+                // Close runners: spread out in lanes, Far runners: converge to center
+                let convergeFactor = progress // 0 = at player position, 1 = far ahead
+                let offsetX = laneOffset * (1.0 - convergeFactor) // Reduce lane offset as they get further
 
-                // 6. Update runner's screen position
-                runnerNode.position = CGPoint(x: offsetX + laneOffset, y: baseY)
+                // 7. Update runner's screen position
+                runnerNode.position = CGPoint(x: offsetX, y: baseY)
 
-                // 7. Scale runner by distance gap (farther = smaller, shrinks faster now)
-                let shrinkStrength: CGFloat = 1.0    // stronger scaling curve
+                // 8. Scale runner by distance gap (farther = smaller)
+                let shrinkStrength: CGFloat = 1.0
                 let scaleFactor = max(0.2, 1.0 - (delta / maxVisibleDelta) * shrinkStrength)
                 runnerNode.setScale(scaleFactor)
 
-                // 8. Update animation speed if this runner's speed changed
+                // 9. Update animation speed if this runner's speed changed
                 let newSpeed = otherRunnersSpeeds[i]
                 if previousOpponentSpeeds[i] != newSpeed {
                     runnerSprite.removeAllActions()
@@ -398,7 +401,7 @@ class BaseRunningScene: SKScene, ObservableObject {
                 }
             }
 
-            // 9. Record finish time if runner crosses finish line
+            // 10. Record finish time if runner crosses finish line
             if runnerDistance >= raceDistance && finishTimes[i] == nil {
                 finishTimes[i] = currentTime - (startTime ?? currentTime)
             }
@@ -580,7 +583,7 @@ class BaseRunningScene: SKScene, ObservableObject {
         print("✅ Started listening to broadcast stream")
         
         for await message in stream {
-            print("📡 Received broadcast message: \(message)")
+//            print("📡 Received broadcast message: \(message)")
             
             // Extract payload from the message
             guard let payload = message["payload"]?.objectValue else {
@@ -599,7 +602,7 @@ class BaseRunningScene: SKScene, ObservableObject {
             let pace = payload["pace"]?.doubleValue ?? 0
             let speedMps = pace > 0 ? 1000 / (pace * 60) : 0
             
-            print("👤 Processing update for user \(userId): distance=\(distance), pace=\(pace), speed=\(speedMps)")
+//            print("👤 Processing update for user \(userId): distance=\(distance), pace=\(pace), speed=\(speedMps)")
             
             // Update or create opponent data
             if realtimeOpponents[userId] != nil {
@@ -710,13 +713,18 @@ class BaseRunningScene: SKScene, ObservableObject {
             if !runnerNode.isHidden {
                 let baseY = -frame.height / 2.5 + (frame.height * 0.2)
                 let maxVisibleDelta: CGFloat = 500
-                let trackWidth: CGFloat = frame.width * 0.8
                 let progress = min(delta / maxVisibleDelta, 1.0)
-                let offsetX = progress * trackWidth - (trackWidth / 2)
-                let laneSpacing: CGFloat = 80
+                
+                // Stagger runners slightly left/right into "lanes"
+                let laneSpacing: CGFloat = 150
                 let laneOffset = CGFloat(i - otherRunners.count / 2) * laneSpacing
                 
-                runnerNode.position = CGPoint(x: offsetX + laneOffset, y: baseY)
+                // Converge towards center as they get further ahead
+                // Close runners: spread out in lanes, Far runners: converge to center
+                let convergeFactor = progress // 0 = at player position, 1 = far ahead
+                let offsetX = laneOffset * (1.0 - convergeFactor) // Reduce lane offset as they get further
+                
+                runnerNode.position = CGPoint(x: offsetX, y: baseY)
                 
                 let shrinkStrength: CGFloat = 1.0
                 let scaleFactor = max(0.2, 1.0 - (delta / maxVisibleDelta) * shrinkStrength)
@@ -751,9 +759,9 @@ class BaseRunningScene: SKScene, ObservableObject {
         
         let activeOpponents = Array(realtimeOpponents.values)
         
-        if activeOpponents.count > 0 {
-            print("🔄 Syncing \(activeOpponents.count) active opponents to scene (current runners: \(otherRunners.count))")
-        }
+//        if activeOpponents.count > 0 {
+//            print("🔄 Syncing \(activeOpponents.count) active opponents to scene (current runners: \(otherRunners.count))")
+//        }
         
         // Update existing runners or create new ones
         while otherRunners.count < activeOpponents.count && otherRunners.count < 10 {
