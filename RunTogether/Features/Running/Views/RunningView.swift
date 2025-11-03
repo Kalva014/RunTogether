@@ -19,6 +19,8 @@ struct RunningView: View {
     @StateObject private var viewModel: RunningViewModel
     @State private var isHeartPulsing = false
     @State private var navigateToResults = false
+    @State private var showMenu = false
+    @State private var showLeaveConfirmation = false
     @Environment(\.dismiss) private var dismiss
     
     init(mode: String, isTreadmillMode: Bool, distance: String, useMiles: Bool, raceId: UUID? = nil) {
@@ -61,6 +63,11 @@ struct RunningView: View {
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .animation(.spring(), value: viewModel.raceScene.isRaceOver)
+            }
+            
+            // Menu overlay
+            if showMenu {
+                menuOverlay()
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -108,6 +115,21 @@ struct RunningView: View {
             } label: { EmptyView() }
                 .hidden()
         )
+        .alert("Leave Race?", isPresented: $showLeaveConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Leave", role: .destructive) {
+                Task {
+                    if let raceId = raceId {
+                        await viewModel.stopRealtime(appEnvironment: appEnvironment)
+                        // Optionally call leaveRace on the backend if needed
+                        try await appEnvironment.supabaseConnection.leaveRace(raceId: raceId)
+                    }
+                    dismiss()
+                }
+            }
+        } message: {
+            Text("Are you sure you want to leave this race? Your progress will be lost.")
+        }
     }
 
     // MARK: - Subviews
@@ -116,7 +138,9 @@ struct RunningView: View {
             HStack {
                 Spacer()
                 VStack(alignment: .trailing, spacing: 8) {
-                    Button(action: {}) {
+                    Button(action: {
+                        showMenu.toggle()
+                    }) {
                         Image(systemName: "gearshape")
                             .font(.system(size: 36))
                             .foregroundColor(.white)
@@ -342,6 +366,95 @@ struct RunningView: View {
                     }
                 }, perform: {})
         }
+    }
+    
+    // MARK: - Menu Overlay
+    private func menuOverlay() -> some View {
+        ZStack {
+            // Semi-transparent background
+            Color.black.opacity(0.6)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    showMenu = false
+                }
+            
+            // Menu content
+            VStack(spacing: 20) {
+                Text("Race Menu")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                
+                Divider()
+                    .background(Color.white.opacity(0.3))
+                
+                // Copy Race ID button
+                if let raceId = raceId {
+                    Button(action: {
+                        UIPasteboard.general.string = raceId.uuidString
+                        showMenu = false
+                    }) {
+                        HStack {
+                            Image(systemName: "doc.on.doc")
+                                .font(.title3)
+                            Text("Copy Race ID")
+                                .font(.headline)
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue.opacity(0.8))
+                        .cornerRadius(10)
+                    }
+                    
+                    Text(raceId.uuidString)
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                
+                // Leave Race button
+                Button(action: {
+                    showMenu = false
+                    showLeaveConfirmation = true
+                }) {
+                    HStack {
+                        Image(systemName: "rectangle.portrait.and.arrow.right")
+                            .font(.title3)
+                        Text("Leave Race")
+                            .font(.headline)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.red.opacity(0.8))
+                    .cornerRadius(10)
+                }
+                
+                // Close button
+                Button(action: {
+                    showMenu = false
+                }) {
+                    Text("Close")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.gray.opacity(0.6))
+                        .cornerRadius(10)
+                }
+            }
+            .padding(30)
+            .background(
+                RoundedRectangle(cornerRadius: 20)
+                    .fill(Color.black.opacity(0.9))
+                    .shadow(radius: 20)
+            )
+            .padding(.horizontal, 40)
+        }
+        .transition(.opacity)
+        .animation(.easeInOut(duration: 0.3), value: showMenu)
     }
 }
 
