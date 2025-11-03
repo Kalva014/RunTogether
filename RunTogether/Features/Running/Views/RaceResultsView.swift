@@ -12,21 +12,54 @@ struct RaceResultsView: View {
     let playerTime: TimeInterval?
     let distance: String
     let stats: RaceStats?
+    let raceId: UUID?
     
     // A callback to handle the navigation action
     var onExitToHome: (() -> Void)? = nil
     
     // An Environment variable to dismiss the view
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var appEnvironment: AppEnvironment
     
     // Programmatic navigation to Home
     @State private var navigateHome: Bool = false
+    @State private var showChat: Bool = false
+    @StateObject private var chatViewModel: ChatViewModel
+    
+    init(leaderboard: [RunnerData], playerTime: TimeInterval?, distance: String, stats: RaceStats?, raceId: UUID?, onExitToHome: (() -> Void)? = nil) {
+        self.leaderboard = leaderboard
+        self.playerTime = playerTime
+        self.distance = distance
+        self.stats = stats
+        self.raceId = raceId
+        self.onExitToHome = onExitToHome
+        
+        _chatViewModel = StateObject(wrappedValue: ChatViewModel(raceId: raceId))
+    }
     
     var body: some View {
-        VStack(spacing: 16) {
-            Button(action: { navigateHome = true }) {
-                Text("Home")
-            }.buttonStyle(.borderedProminent)
+        ZStack {
+            VStack(spacing: 16) {
+                HStack {
+                    Button(action: { navigateHome = true }) {
+                        Text("Home")
+                    }.buttonStyle(.borderedProminent)
+                    
+                    Spacer()
+                    
+                    // Chat button (only show if raceId exists)
+                    if raceId != nil {
+                        Button(action: {
+                            showChat.toggle()
+                        }) {
+                            HStack {
+                                Image(systemName: "message.fill")
+                                Text("Chat")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
             
             VStack(spacing: 4) {
                 Text("Race Results")
@@ -66,16 +99,23 @@ struct RaceResultsView: View {
                 }
             }
             .listStyle(.insetGrouped)
+            }
+            .padding(.horizontal)
+            .navigationBarTitleDisplayMode(.inline)
+            .background(
+                NavigationLink(isActive: $navigateHome) {
+                    HomeView()
+                } label: { EmptyView() }
+                    .hidden()
+            )
+            
+            // Chat overlay
+            if showChat {
+                ChatView(viewModel: chatViewModel, isPresented: $showChat)
+                    .transition(.move(edge: .bottom))
+                    .zIndex(100)
+            }
         }
-        .padding(.horizontal)
-        .navigationBarTitleDisplayMode(.inline)
-        .background(
-            NavigationLink(isActive: $navigateHome) {
-                HomeView()
-            } label: { EmptyView() }
-                .hidden()
-        )
-        
     }
     
     private func formatTime(_ t: TimeInterval) -> String {
@@ -101,8 +141,9 @@ struct RaceResultsView: View {
             playerPlace: 1,
             totalRunners: 3,
             raceDistanceMeters: 5000,
-            useMiles: true
-        )
+            useMiles: true,
+        ),
+        raceId: nil
     )
 }
 

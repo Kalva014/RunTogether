@@ -606,7 +606,7 @@ class BaseRunningScene: SKScene, ObservableObject {
             
             // Update or create opponent data
             if realtimeOpponents[userId] != nil {
-                print("🔄 Updating existing opponent \(userId)")
+//                print("🔄 Updating existing opponent \(userId)")
                 realtimeOpponents[userId]?.distance = distance
                 realtimeOpponents[userId]?.paceMinutes = pace
                 realtimeOpponents[userId]?.speedMps = speedMps

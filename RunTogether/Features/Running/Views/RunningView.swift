@@ -17,10 +17,12 @@ struct RunningView: View {
     @EnvironmentObject var appEnvironment: AppEnvironment
     
     @StateObject private var viewModel: RunningViewModel
+    @StateObject private var chatViewModel: ChatViewModel
     @State private var isHeartPulsing = false
     @State private var navigateToResults = false
     @State private var showMenu = false
     @State private var showLeaveConfirmation = false
+    @State private var showChat = false
     @Environment(\.dismiss) private var dismiss
     
     init(mode: String, isTreadmillMode: Bool, distance: String, useMiles: Bool, raceId: UUID? = nil) {
@@ -31,6 +33,7 @@ struct RunningView: View {
         self.raceId = raceId
                 
         _viewModel = StateObject(wrappedValue: RunningViewModel(mode: mode, isTreadmillMode: isTreadmillMode, distance: distance, useMiles: useMiles, raceId: raceId))
+        _chatViewModel = StateObject(wrappedValue: ChatViewModel(raceId: raceId))
     }
 
 
@@ -68,6 +71,13 @@ struct RunningView: View {
             // Menu overlay
             if showMenu {
                 menuOverlay()
+            }
+            
+            // Chat overlay
+            if showChat {
+                ChatView(viewModel: chatViewModel, isPresented: $showChat)
+                    .transition(.move(edge: .bottom))
+                    .zIndex(100)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -108,8 +118,9 @@ struct RunningView: View {
                         playerPlace: (viewModel.leaderboard.firstIndex(where: { $0.name == "You" }) ?? 0) + 1,
                         totalRunners: viewModel.leaderboard.count,
                         raceDistanceMeters: Double(viewModel.raceScene.raceDistance),
-                        useMiles: useMiles
+                        useMiles: useMiles,
                     ),
+                    raceId: raceId,
                     onExitToHome: { dismiss() }
                 )
             } label: { EmptyView() }
@@ -138,12 +149,26 @@ struct RunningView: View {
             HStack {
                 Spacer()
                 VStack(alignment: .trailing, spacing: 8) {
-                    Button(action: {
-                        showMenu.toggle()
-                    }) {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 36))
-                            .foregroundColor(.white)
+                    HStack(spacing: 12) {
+                        // Chat button (only show if raceId exists)
+                        if raceId != nil {
+                            Button(action: {
+                                showChat.toggle()
+                            }) {
+                                Image(systemName: "message.fill")
+                                    .font(.system(size: 36))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        
+                        // Settings button
+                        Button(action: {
+                            showMenu.toggle()
+                        }) {
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 36))
+                                .foregroundColor(.white)
+                        }
                     }
 
                     VStack(alignment: .trailing, spacing: 8) {

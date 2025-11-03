@@ -129,7 +129,7 @@ class RunningViewModel: ObservableObject {
                     ? paceComponents[0] + paceComponents[1] / 60
                     : 0.0
                 
-                print("📤 Broadcasting update: distance=\(distance)m, pace=\(paceMinutes)min")
+//                print("📤 Broadcasting update: distance=\(distance)m, pace=\(paceMinutes)min")
                 
                 await appEnvironment.supabaseConnection.broadcastRaceUpdate(
                     raceId: raceId,
