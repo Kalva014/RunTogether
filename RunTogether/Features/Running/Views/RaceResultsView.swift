@@ -89,14 +89,14 @@ struct RaceResultsView: View {
 #Preview {
     RaceResultsView(
         leaderboard: [
-            RunnerData(name: "Ken", distance: 5000, pace: "--:--", finishTime: 1500, speed: nil),
+            RunnerData(name: "You", distance: 5000, pace: "--:--", finishTime: 1500, speed: nil),
             RunnerData(name: "Bre", distance: 5000, pace: "--:--", finishTime: 1520, speed: nil),
             RunnerData(name: "John", distance: 4800, pace: "5:30", finishTime: nil, speed: nil)
         ],
         playerTime: 1500,
         distance: "3.11mi / 3.11mi",
         stats: RaceStats(
-            playerName: "Ken",
+            playerName: "You",
             playerTime: 1500,
             playerPlace: 1,
             totalRunners: 3,

@@ -26,7 +26,7 @@ class RaceScene: BaseRunningScene {
         // Add player
         let playerSpeed = isTreadmillMode ? currentPlayerSpeed : (locationManager?.currentSpeed ?? 0)
         currRunners.append(RunnerData(
-            name: "Ken",
+            name: "You",
             distance: playerDistance,
             pace: pace ?? "--:--",
             finishTime: finishTimes[-1],

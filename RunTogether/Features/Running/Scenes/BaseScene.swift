@@ -465,7 +465,7 @@ class BaseRunningScene: SKScene, ObservableObject {
     
     func updateWidgetData() {
         let defaults = UserDefaults(suiteName: "group.com.kenneth.RunTogether")
-        let playerPosition = leaderboard.firstIndex(where: { $0.name == "Ken" }) ?? 0
+        let playerPosition = leaderboard.firstIndex(where: { $0.name == "You" }) ?? 0
         let playerDistanceInt = Int(playerDistance)
         let playerPace = formatTime(finishTimes[-1] ?? CACurrentMediaTime() - (startTime ?? CACurrentMediaTime()))
         
@@ -509,7 +509,7 @@ class BaseRunningScene: SKScene, ObservableObject {
         // Add player
         let playerSpeed = isTreadmillMode ? currentPlayerSpeed : (locationManager?.currentSpeed ?? 0)
         currRunners.append(RunnerData(
-            name: "Ken",
+            name: "You",
             distance: playerDistance,
             pace: pace ?? "--:--",
             finishTime: finishTimes[-1],

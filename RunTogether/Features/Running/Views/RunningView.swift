@@ -103,9 +103,9 @@ struct RunningView: View {
                     playerTime: viewModel.raceScene.finishTimes[-1],
                     distance: viewModel.playerProgressDetail,
                     stats: RaceStats(
-                        playerName: "Ken",
+                        playerName: "You",
                         playerTime: viewModel.raceScene.finishTimes[-1],
-                        playerPlace: (viewModel.leaderboard.firstIndex(where: { $0.name == "Ken" }) ?? 0) + 1,
+                        playerPlace: (viewModel.leaderboard.firstIndex(where: { $0.name == "You" }) ?? 0) + 1,
                         totalRunners: viewModel.leaderboard.count,
                         raceDistanceMeters: Double(viewModel.raceScene.raceDistance),
                         useMiles: useMiles
