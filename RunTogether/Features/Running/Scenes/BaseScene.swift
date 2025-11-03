@@ -641,7 +641,8 @@ class BaseRunningScene: SKScene, ObservableObject {
         // Remove stale opponents
         realtimeOpponents = realtimeOpponents.filter { !$0.value.isStale }
         
-        let activeOpponents = Array(realtimeOpponents.values)
+        // Sort by userId to maintain consistent ordering
+        let activeOpponents = realtimeOpponents.sorted(by: { $0.key.uuidString < $1.key.uuidString }).map { $0.value }
         
         // Update existing runners or create new ones
         while otherRunners.count < activeOpponents.count && otherRunners.count < 10 {
@@ -677,6 +678,15 @@ class BaseRunningScene: SKScene, ObservableObject {
             let speedMps = opponent.paceMinutes > 0 ? 1000 / (opponent.paceMinutes * 60) : 0
             otherRunnersSpeeds[index] = CGFloat(speedMps)
             otherRunnersNames[index] = opponent.username
+            
+            // Update the name label on the sprite if it changed
+            let runnerNode = otherRunners[index]
+            if let labelContainer = runnerNode.children.first(where: { $0 is SKNode && $0.children.count > 1 }),
+               let nameLabel = labelContainer.children.first(where: { $0 is SKLabelNode }) as? SKLabelNode {
+                if nameLabel.text != opponent.username {
+                    nameLabel.text = opponent.username
+                }
+            }
         }
     }
 
@@ -757,7 +767,8 @@ class BaseRunningScene: SKScene, ObservableObject {
             print("🧹 Removed \(beforeCount - afterCount) stale opponents")
         }
         
-        let activeOpponents = Array(realtimeOpponents.values)
+        // Sort by userId to maintain consistent ordering
+        let activeOpponents = realtimeOpponents.sorted(by: { $0.key.uuidString < $1.key.uuidString }).map { $0.value }
         
 //        if activeOpponents.count > 0 {
 //            print("🔄 Syncing \(activeOpponents.count) active opponents to scene (current runners: \(otherRunners.count))")
@@ -796,6 +807,15 @@ class BaseRunningScene: SKScene, ObservableObject {
             otherRunnersCurrentDistances[index] = CGFloat(opponent.distance)
             otherRunnersSpeeds[index] = CGFloat(opponent.speedMps)
             otherRunnersNames[index] = opponent.username
+            
+            // Update the name label on the sprite if it changed
+            let runnerNode = otherRunners[index]
+            if let labelContainer = runnerNode.children.first(where: { $0 is SKNode && $0.children.count > 1 }),
+               let nameLabel = labelContainer.children.first(where: { $0 is SKLabelNode }) as? SKLabelNode {
+                if nameLabel.text != opponent.username {
+                    nameLabel.text = opponent.username
+                }
+            }
         }
     }
 }
