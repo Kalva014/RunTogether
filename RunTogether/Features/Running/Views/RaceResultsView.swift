@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct RaceResultsView: View {
-    let leaderboard: [RunnerData]
+    let initialLeaderboard: [RunnerData]
     let playerTime: TimeInterval?
     let distance: String
     let stats: RaceStats?
@@ -25,9 +25,10 @@ struct RaceResultsView: View {
     @State private var navigateHome: Bool = false
     @State private var showChat: Bool = false
     @StateObject private var chatViewModel: ChatViewModel
+    @StateObject private var resultsViewModel: RaceResultsViewModel
     
     init(leaderboard: [RunnerData], playerTime: TimeInterval?, distance: String, stats: RaceStats?, raceId: UUID?, onExitToHome: (() -> Void)? = nil) {
-        self.leaderboard = leaderboard
+        self.initialLeaderboard = leaderboard
         self.playerTime = playerTime
         self.distance = distance
         self.stats = stats
@@ -35,6 +36,11 @@ struct RaceResultsView: View {
         self.onExitToHome = onExitToHome
         
         _chatViewModel = StateObject(wrappedValue: ChatViewModel(raceId: raceId))
+        _resultsViewModel = StateObject(wrappedValue: RaceResultsViewModel(
+            initialLeaderboard: leaderboard,
+            raceId: raceId,
+            useMiles: stats?.useMiles ?? true
+        ))
     }
     
     var body: some View {
@@ -81,24 +87,56 @@ struct RaceResultsView: View {
             .padding(.top, 8)
             
             List {
-                ForEach(Array(leaderboard.enumerated()), id: \.element.id) { index, runner in
-                    HStack {
-                        Text("\(index + 1)")
-                            .frame(width: 24, alignment: .leading)
-                            .foregroundColor(.yellow)
-                        Text(runner.name)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        if let t = runner.finishTime {
-                            Text(formatTime(t))
-                                .monospacedDigit()
-                        } else {
-                            Text(runner.pace)
-                                .foregroundColor(.secondary)
+                ForEach(Array(resultsViewModel.leaderboard.enumerated()), id: \.element.id) { index, runner in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("\(index + 1)")
+                                .frame(width: 24, alignment: .leading)
+                                .foregroundColor(.yellow)
+                                .font(.headline)
+                            
+                            Text(runner.name)
+                                .font(.headline)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            
+                            Spacer()
+                        }
+                        
+                        HStack(spacing: 16) {
+                            // Time column
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Time")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                if let finishTime = runner.finishTime {
+                                    Text(formatTime(finishTime))
+                                        .monospacedDigit()
+                                        .font(.subheadline)
+                                } else {
+                                    Text("N/A")
+                                        .foregroundColor(.secondary)
+                                        .font(.subheadline)
+                                }
+                            }
+                            
+                            // Pace column
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Avg Pace")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text(runner.pace)
+                                    .monospacedDigit()
+                                    .font(.subheadline)
+                            }
                         }
                     }
+                    .padding(.vertical, 4)
                 }
             }
             .listStyle(.insetGrouped)
+            .refreshable {
+                // Refresh is handled by realtime updates
+            }
             }
             .padding(.horizontal)
             .navigationBarTitleDisplayMode(.inline)
@@ -114,6 +152,19 @@ struct RaceResultsView: View {
                 ChatView(viewModel: chatViewModel, isPresented: $showChat)
                     .transition(.move(edge: .bottom))
                     .zIndex(100)
+            }
+        }
+        .onAppear {
+            // Start realtime updates if raceId exists
+            if raceId != nil {
+                Task {
+                    await resultsViewModel.startRealtimeUpdates(appEnvironment: appEnvironment)
+                }
+            }
+        }
+        .onDisappear {
+            Task {
+                await resultsViewModel.stopRealtimeUpdates()
             }
         }
     }
