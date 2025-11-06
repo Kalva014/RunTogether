@@ -56,6 +56,14 @@ class LeaderboardTabViewModel: ObservableObject {
         return "User \(userId.uuidString.prefix(8))"
     }
     
+    func profilePictureUrl(for userId: UUID) -> String? {
+        return profiles[userId]?.profile_picture_url
+    }
+    
+    func username(for userId: UUID) -> String {
+        return profiles[userId]?.username ?? "User"
+    }
+    
     func fetchLeaderboard(appEnvironment: AppEnvironment, page: Int? = nil) async {
         isLoading = true
         errorMessage = nil

@@ -18,7 +18,9 @@ struct LeaderboardTabView: View {
                     MyStatsCard(
                         stats: myStats,
                         rank: viewModel.myRank,
-                        displayName: viewModel.myDisplayName
+                        displayName: viewModel.myDisplayName,
+                        profilePictureUrl: viewModel.myProfile?.profile_picture_url,
+                        username: viewModel.myProfile?.username ?? "User"
                     )
                     .padding()
                 }
@@ -27,12 +29,14 @@ struct LeaderboardTabView: View {
                 ScrollView {
                     LazyVStack(spacing: 12) {
                         ForEach(Array(viewModel.leaderboardEntries.enumerated()), id: \.element.user_id) { index, entry in
-                            NavigationLink(destination: ProfileDetailView(username: viewModel.displayName(for: entry.user_id))) {
+                            NavigationLink(destination: ProfileDetailView(username: viewModel.username(for: entry.user_id))) {
                                 LeaderboardRow(
                                     entry: entry,
                                     displayName: viewModel.displayName(for: entry.user_id),
                                     rank: (viewModel.currentPage * viewModel.pageSize) + index + 1,
-                                    isCurrentUser: entry.user_id == appEnvironment.supabaseConnection.currentUserId
+                                    isCurrentUser: entry.user_id == appEnvironment.supabaseConnection.currentUserId,
+                                    profilePictureUrl: viewModel.profilePictureUrl(for: entry.user_id),
+                                    username: viewModel.username(for: entry.user_id)
                                 )
                             }
                             .buttonStyle(PlainButtonStyle())
@@ -87,10 +91,14 @@ struct MyStatsCard: View {
     let stats: GlobalLeaderboardEntry
     let rank: Int?
     let displayName: String
+    let profilePictureUrl: String?
+    let username: String
     
     var body: some View {
         VStack(spacing: 12) {
             HStack {
+                ProfilePictureView(imageUrl: profilePictureUrl, username: username, size: 50)
+                
                 VStack(alignment: .leading, spacing: 4) {
                     Text(displayName)
                         .font(.headline)
@@ -157,6 +165,8 @@ struct LeaderboardRow: View {
     let displayName: String
     let rank: Int
     let isCurrentUser: Bool
+    let profilePictureUrl: String?
+    let username: String
     
     var body: some View {
         HStack(spacing: 16) {
@@ -170,6 +180,9 @@ struct LeaderboardRow: View {
                     .font(.headline)
                     .foregroundColor(.white)
             }
+            
+            // Profile Picture
+            ProfilePictureView(imageUrl: profilePictureUrl, username: username, size: 44)
             
             // User Stats
             VStack(alignment: .leading, spacing: 4) {

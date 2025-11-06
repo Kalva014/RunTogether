@@ -63,14 +63,7 @@ struct FriendRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 16) {
-                ZStack {
-                    Circle()
-                        .fill(Color.blue.opacity(0.2))
-                        .frame(width: 44, height: 44)
-                    Text(String(friend.username.prefix(1)).uppercased())
-                        .font(.headline)
-                        .foregroundColor(.blue)
-                }
+                ProfilePictureView(imageUrl: friend.profilePictureUrl, username: friend.username, size: 44)
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(friend.username)

@@ -7,6 +7,7 @@ class FriendsTabViewModel: ObservableObject {
         let id: UUID
         let username: String
         let activeRaceId: UUID?
+        let profilePictureUrl: String?
     }
     
     @Published var friends: [FriendDisplay] = []
@@ -33,7 +34,7 @@ class FriendsTabViewModel: ObservableObject {
                 // Get active race if any
                 let raceId = try? await appEnvironment.supabaseConnection.getActiveRaceForUser(userId: profile.id)
                 
-                let display = FriendDisplay(id: profile.id, username: profile.username, activeRaceId: raceId)
+                let display = FriendDisplay(id: profile.id, username: profile.username, activeRaceId: raceId, profilePictureUrl: profile.profile_picture_url)
                 loadedFriends.append(display)
             }
             

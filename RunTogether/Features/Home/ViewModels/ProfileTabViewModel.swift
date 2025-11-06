@@ -11,9 +11,9 @@ import SwiftUI
 
 @MainActor
 class ProfileTabViewModel: ObservableObject {
-    func editProfile(appEnvironment: AppEnvironment, username: String?, firstName: String?, lastName: String?, location: String?) async {
+    func editProfile(appEnvironment: AppEnvironment, username: String?, firstName: String?, lastName: String?, location: String?, profilePictureUrl: String? = nil) async {
         do {
-            try await appEnvironment.supabaseConnection.updateProfile(username: username, firstName: firstName, lastName: lastName, location: location)
+            try await appEnvironment.supabaseConnection.updateProfile(username: username, firstName: firstName, lastName: lastName, location: location, profilePictureUrl: profilePictureUrl)
         }
         catch {
             print("Error editing profile: \(error.localizedDescription)")

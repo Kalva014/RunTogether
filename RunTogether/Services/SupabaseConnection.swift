@@ -83,14 +83,15 @@ class SupabaseConnection: ObservableObject {
         }
     }
     
-    func updateProfile(username: String? = nil, firstName: String? = nil, lastName: String? = nil, location: String? = nil) async throws {
+    func updateProfile(username: String? = nil, firstName: String? = nil, lastName: String? = nil, location: String? = nil, profilePictureUrl: String? = nil) async throws {
         guard let userId = self.currentUserId else { return }
         
-        var updatesDict: [String: String] = [:]
-        if let username = username, !username.isEmpty { updatesDict["username"] = username }
-        if let firstName = firstName, !firstName.isEmpty { updatesDict["first_name"] = firstName }
-        if let lastName = lastName, !lastName.isEmpty { updatesDict["last_name"] = lastName }
-        if let location = location, !location.isEmpty { updatesDict["location"] = location }
+        var updatesDict: [String: AnyJSON] = [:]
+        if let username = username, !username.isEmpty { updatesDict["username"] = .string(username) }
+        if let firstName = firstName, !firstName.isEmpty { updatesDict["first_name"] = .string(firstName) }
+        if let lastName = lastName, !lastName.isEmpty { updatesDict["last_name"] = .string(lastName) }
+        if let location = location, !location.isEmpty { updatesDict["location"] = .string(location) }
+        if let profilePictureUrl = profilePictureUrl { updatesDict["profile_picture_url"] = .string(profilePictureUrl) }
         
         guard !updatesDict.isEmpty else { return }
                 
@@ -123,6 +124,57 @@ class SupabaseConnection: ObservableObject {
         catch {
             print("Error: \(error)")
             return nil
+        }
+    }
+    
+    // MARK: - Profile Picture Management
+    /// Uploads a profile picture image to Supabase storage
+    func uploadProfilePicture(imageData: Data) async throws -> String? {
+        guard let userId = self.currentUserId else { return nil }
+        
+        do {
+            let fileName = "\(userId.uuidString)/profile_picture_\(UUID().uuidString).jpg"
+            
+            // Upload to Supabase storage bucket (assuming bucket name is "profile-pictures")
+            // Note: The bucket "profile-pictures" must be created in Supabase dashboard
+            // and configured with appropriate policies for public read access
+            try await client.storage
+                .from("profile-pictures")
+                .upload(
+                    path: fileName,
+                    file: imageData,
+                    options: FileOptions(
+                        cacheControl: "3600",
+                        contentType: "image/jpeg", upsert: true
+                    )
+                )
+            
+            // Get public URL
+            let url = try client.storage
+                .from("profile-pictures")
+                .getPublicURL(path: fileName)
+            
+            return url.absoluteString
+        } catch {
+            print("Error uploading profile picture: \(error)")
+            throw error
+        }
+    }
+    
+    /// Deletes a profile picture from Supabase storage
+    func deleteProfilePicture(fileName: String) async throws {
+        guard let userId = self.currentUserId else { return }
+        
+        do {
+            // Extract just the filename from the full URL if needed
+            let path = fileName.contains(userId.uuidString) ? fileName : "\(userId.uuidString)/\(fileName)"
+            
+            try await client.storage
+                .from("profile-pictures")
+                .remove(paths: [path])
+        } catch {
+            print("Error deleting profile picture: \(error)")
+            throw error
         }
     }
     

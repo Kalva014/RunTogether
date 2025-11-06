@@ -28,7 +28,9 @@ struct ProfileDetailView: View {
                         .padding()
                 } else if let profile = profile {
                     // Profile Header
-                    VStack(spacing: 8) {
+                    VStack(spacing: 12) {
+                        ProfilePictureView(imageUrl: profile.profile_picture_url, username: profile.username, size: 120)
+                        
                         Text("@\(profile.username)")
                             .font(.title)
                             .bold()

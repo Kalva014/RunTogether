@@ -85,7 +85,7 @@ struct GroupDetailView: View {
                 
                 // Members Section
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Members (\(viewModel.clubMembers.count))")
+                    Text("Members (\(viewModel.memberProfiles.count))")
                         .font(.headline)
                         .padding(.horizontal)
                     
@@ -100,14 +100,12 @@ struct GroupDetailView: View {
                             .padding()
                     } else {
                         VStack(spacing: 0) {
-                            ForEach(viewModel.clubMembers, id: \.self) { username in
-                                NavigationLink(destination: ProfileDetailView(username: username)) {
+                            ForEach(viewModel.memberProfiles) { member in
+                                NavigationLink(destination: ProfileDetailView(username: member.username)) {
                                     HStack {
-                                        Image(systemName: "person.circle.fill")
-                                            .foregroundColor(.blue)
-                                            .font(.title2)
+                                        ProfilePictureView(imageUrl: member.profilePictureUrl, username: member.username, size: 44)
                                         
-                                        Text(username)
+                                        Text(member.username)
                                             .font(.body)
                                             .foregroundColor(.primary)
                                         
@@ -122,7 +120,7 @@ struct GroupDetailView: View {
                                 }
                                 .buttonStyle(PlainButtonStyle())
                                 
-                                if username != viewModel.clubMembers.last {
+                                if member.id != viewModel.memberProfiles.last?.id {
                                     Divider()
                                         .padding(.leading, 60)
                                 }

@@ -95,6 +95,8 @@ struct RaceResultsView: View {
                                 .foregroundColor(.yellow)
                                 .font(.headline)
                             
+                            ProfilePictureView(imageUrl: runner.profilePictureUrl, username: runner.name, size: 36)
+                            
                             Text(runner.name)
                                 .font(.headline)
                                 .frame(maxWidth: .infinity, alignment: .leading)

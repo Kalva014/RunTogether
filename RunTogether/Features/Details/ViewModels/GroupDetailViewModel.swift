@@ -8,7 +8,14 @@ import Foundation
 
 @MainActor
 class GroupDetailViewModel: ObservableObject {
+    struct MemberInfo: Identifiable {
+        let id: UUID
+        let username: String
+        let profilePictureUrl: String?
+    }
+    
     @Published var clubMembers: [String] = []
+    @Published var memberProfiles: [MemberInfo] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var isMember = false
@@ -78,6 +85,15 @@ class GroupDetailViewModel: ObservableObject {
         
         do {
             clubMembers = try await appEnvironment.supabaseConnection.listRunClubMembers(name: clubName)
+            
+            // Fetch profile information for each member
+            var profiles: [MemberInfo] = []
+            for username in clubMembers {
+                if let profile = try? await appEnvironment.supabaseConnection.getProfileByUsername(username: username) {
+                    profiles.append(MemberInfo(id: profile.id, username: profile.username, profilePictureUrl: profile.profile_picture_url))
+                }
+            }
+            memberProfiles = profiles
         } catch {
             errorMessage = "Failed to fetch club members: \(error.localizedDescription)"
         }

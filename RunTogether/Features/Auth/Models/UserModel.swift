@@ -21,4 +21,5 @@ struct Profile: Codable, Identifiable {
     var first_name: String
     var last_name: String
     var location: String?
+    var profile_picture_url: String?
 }

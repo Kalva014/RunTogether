@@ -15,6 +15,7 @@ class RaceResultsViewModel: ObservableObject {
     
     private let initialLeaderboard: [RunnerData]
     private var realtimeOpponents: [UUID: RealtimeOpponentData] = [:]
+    private var profileCache: [UUID: Profile] = [:] // Cache profiles for quick lookup
     private var raceId: UUID?
     private var appEnvironment: AppEnvironment?
     private var useMiles: Bool
@@ -96,12 +97,13 @@ class RaceResultsViewModel: ObservableObject {
                 realtimeOpponents[userId]?.lastUpdateTime = Date()
                 await updateLeaderboard()
             } else {
-                // Fetch username for new opponent
+                // Fetch profile for new opponent
                 Task { @MainActor in
                     if let profile = try? await appEnvironment.supabaseConnection.getProfileById(userId: userId) {
+                        profileCache[userId] = profile
                         realtimeOpponents[userId] = RealtimeOpponentData(
                             userId: userId,
-                            username: profile.username ?? "Unknown",
+                            username: profile.username,
                             distance: distance,
                             paceMinutes: pace,
                             speedMps: speedMps,
@@ -137,12 +139,16 @@ class RaceResultsViewModel: ObservableObject {
                 // Format pace string
                 let paceString = formatPace(paceMinutes: opponent.paceMinutes)
                 
+                // Get profile picture from cache if available
+                let profilePictureUrl = profileCache[opponent.userId]?.profile_picture_url
+                
                 activeRunners.append(RunnerData(
                     name: opponent.username,
                     distance: CGFloat(opponent.distance),
                     pace: paceString,
                     finishTime: nil,
-                    speed: opponent.speedMps
+                    speed: opponent.speedMps,
+                    profilePictureUrl: profilePictureUrl
                 ))
                 seenRealtimeRunnerNames.insert(opponent.username)
             }
@@ -248,8 +254,12 @@ class RaceResultsViewModel: ObservableObject {
         var profiles: [UUID: Profile] = [:]
         
         for userId in userIds {
-            if let profile = try? await appEnvironment.supabaseConnection.getProfileById(userId: userId) {
+            // Check cache first
+            if let cachedProfile = profileCache[userId] {
+                profiles[userId] = cachedProfile
+            } else if let profile = try? await appEnvironment.supabaseConnection.getProfileById(userId: userId) {
                 profiles[userId] = profile
+                profileCache[userId] = profile // Cache for future use
             }
         }
         
@@ -326,12 +336,14 @@ class RaceResultsViewModel: ObservableObject {
                 print("📊 \(username): No realtime data or finish time - pace: --:--")
             }
             
+            let profile = profiles[participant.user_id]
             completeLeaderboard.append(RunnerData(
                 name: username,
                 distance: distance,
                 pace: pace,
                 finishTime: finishTime,
-                speed: nil
+                speed: nil,
+                profilePictureUrl: profile?.profile_picture_url
             ))
         }
         
