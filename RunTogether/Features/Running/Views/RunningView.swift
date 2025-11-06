@@ -107,6 +107,11 @@ struct RunningView: View {
             Task {
                 if appEnvironment.supabaseConnection != nil {
                     await viewModel.startRealtime(appEnvironment: appEnvironment)
+                    
+                    // Start chat subscription if raceId exists
+                    if raceId != nil {
+                        await chatViewModel.startChat(appEnvironment: appEnvironment)
+                    }
                 } else {
                     // fallback: no supabase connection available
                     print("No SupabaseConnection available in environment.")
@@ -116,6 +121,8 @@ struct RunningView: View {
         .onDisappear {
             Task {
                 await viewModel.stopRealtime(appEnvironment: appEnvironment)
+                // Stop chat subscription when leaving the race
+                await chatViewModel.stopChat()
             }
         }
         .background(
@@ -144,6 +151,7 @@ struct RunningView: View {
                 Task {
                     if let raceId = raceId {
                         await viewModel.stopRealtime(appEnvironment: appEnvironment)
+                        await chatViewModel.stopChat()
                         // Optionally call leaveRace on the backend if needed
                         try await appEnvironment.supabaseConnection.leaveRace(raceId: raceId)
                     }

@@ -98,17 +98,10 @@ struct ChatView: View {
         .contentShape(Rectangle())
         .onAppear {
             Task {
-                await viewModel.startChat(appEnvironment: appEnvironment)
-                
-                // Fetch username
+                // Fetch username when chat view appears
                 if let profile = try? await appEnvironment.supabaseConnection.getProfile() {
                     username = profile.username ?? "You"
                 }
-            }
-        }
-        .onDisappear {
-            Task {
-                await viewModel.stopChat()
             }
         }
     }
