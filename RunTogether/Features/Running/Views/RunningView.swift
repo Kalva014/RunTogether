@@ -75,9 +75,21 @@ struct RunningView: View {
             
             // Chat overlay
             if showChat {
-                ChatView(viewModel: chatViewModel, isPresented: $showChat)
-                    .transition(.move(edge: .bottom))
-                    .zIndex(100)
+                ZStack {
+                    // Semi-transparent background that dismisses chat on tap
+                    Color.black.opacity(0.3)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation {
+                                showChat = false
+                            }
+                        }
+                    
+                    ChatView(viewModel: chatViewModel, isPresented: $showChat)
+                        .transition(.move(edge: .bottom))
+                        .allowsHitTesting(true)
+                }
+                .zIndex(100)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

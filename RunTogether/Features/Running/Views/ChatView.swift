@@ -28,10 +28,18 @@ struct ChatView: View {
                 Button(action: {
                     isPresented = false
                 }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.white)
+                    ZStack {
+                        Rectangle()
+                            .fill(Color.clear)
+                            .frame(width: 44, height: 44)
+                        
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title)
+                            .foregroundColor(.white)
+                    }
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(PlainButtonStyle())
             }
             .padding()
             .background(Color.black.opacity(0.9))
@@ -87,6 +95,7 @@ struct ChatView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black.opacity(0.95))
+        .contentShape(Rectangle())
         .onAppear {
             Task {
                 await viewModel.startChat(appEnvironment: appEnvironment)
