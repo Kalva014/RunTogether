@@ -138,6 +138,8 @@ private extension RunTabView {
                     .textFieldStyle(.roundedBorder)
                 Button("Join Race") { Task { await handleJoinSpecific() }}
                     .buttonStyle(.borderedProminent)
+                    .disabled(raceIdInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .opacity(raceIdInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.6 : 1.0)
             }
             
             Button("Join Random Race") { Task { await handleJoinRandom() }}
