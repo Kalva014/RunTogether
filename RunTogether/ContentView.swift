@@ -14,6 +14,20 @@ struct ContentView: View {
     @EnvironmentObject var appEnvironment: AppEnvironment
     
     var body: some View {
+        Group {
+            if appEnvironment.appUser != nil {
+                // User is logged in → go directly to HomeView
+                HomeView()
+            } else {
+                // User NOT logged in → show welcome screen
+                welcomeScreen
+            }
+        }
+    }
+}
+
+extension ContentView {
+    private var welcomeScreen: some View {
         NavigationStack {
             ZStack {
                 Color.black.ignoresSafeArea()
@@ -69,7 +83,6 @@ struct ContentView: View {
         }
     }
 }
-
 #Preview {
     let supabaseConnection = SupabaseConnection()
     return ContentView()
