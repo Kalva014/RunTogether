@@ -2,8 +2,9 @@
 //  ProfileDetailView.swift
 //  RunTogether
 //
-//  Created by Kenneth Alvarez on 10/7/25.
-//
+// ==========================================
+// MARK: - ProfileDetailView.swift - COMPLETE WITH SCREEN FIX
+// ==========================================
 import SwiftUI
 
 struct ProfileDetailView: View {
@@ -21,148 +22,43 @@ struct ProfileDetailView: View {
     @State private var errorMessage = ""
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                if isLoading {
-                    ProgressView("Loading profile...")
-                        .padding()
-                } else if let profile = profile {
-                    // Profile Header
-                    VStack(spacing: 12) {
-                        ProfilePictureView(imageUrl: profile.profile_picture_url, username: profile.username, size: 120)
+        ZStack {
+            // Background - FIRST with ignoresSafeArea
+            Color.black
+                .ignoresSafeArea()
+            
+            if isLoading {
+                loadingView
+            } else if let profile = profile {
+                ScrollView {
+                    VStack(spacing: 24) {
+                        profileHeader(profile: profile)
+                        friendActionButton
                         
-                        Text("@\(profile.username)")
-                            .font(.title)
-                            .bold()
+                        if let stats = stats {
+                            statsSection(stats: stats)
+                        }
                         
-                        Text("\(profile.first_name) \(profile.last_name)")
-                            .font(.title3)
-                            .foregroundColor(.secondary)
-                        
-                        if let location = profile.location {
-                            Text(location)
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                        }
+                        runClubsSection
                     }
-                    .padding()
-                    
-                    // Friend Actions
-                    HStack(spacing: 16) {
-                        if isFriend {
-                            Button(action: {
-                                Task {
-                                    await removeFriend()
-                                }
-                            }) {
-                                Label("Remove Friend", systemImage: "person.fill.xmark")
-                                    .foregroundColor(.white)
-                                    .padding()
-                                    .frame(maxWidth: .infinity)
-                                    .background(Color.red)
-                                    .cornerRadius(10)
-                            }
-                        } else {
-                            Button(action: {
-                                Task {
-                                    await addFriend()
-                                }
-                            }) {
-                                Label("Add Friend", systemImage: "person.fill.badge.plus")
-                                    .foregroundColor(.white)
-                                    .padding()
-                                    .frame(maxWidth: .infinity)
-                                    .background(Color.blue)
-                                    .cornerRadius(10)
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-                    
-                    // Stats Section
-                    if let stats = stats {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Statistics")
-                                .font(.headline)
-                                .padding(.horizontal)
-                            
-                            VStack(spacing: 12) {
-                                StatRow(
-                                    icon: "flag.checkered",
-                                    label: "Races Completed",
-                                    value: "\(Int(stats.total_races_completed ?? 0))"
-                                )
-                                
-                                StatRow(
-                                    icon: "arrow.left.and.right",
-                                    label: "Total Distance",
-                                    value: String(format: "%.2f mi", stats.total_distance_covered ?? 0)
-                                )
-                                
-                                StatRow(
-                                    icon: "trophy",
-                                    label: "Top 3 Finishes",
-                                    value: "\(stats.top_three_finishes ?? 0)"
-                                )
-                            }
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
-                            .padding(.horizontal)
-                        }
-                    }
-                    
-                    // Run Clubs Section
-                    if !runClubs.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Run Clubs")
-                                .font(.headline)
-                                .padding(.horizontal)
-                            
-                            VStack(alignment: .leading, spacing: 8) {
-                                ForEach(runClubs, id: \.self) { club in
-                                    HStack {
-                                        Image(systemName: "figure.run")
-                                            .foregroundColor(.blue)
-                                        Text(club)
-                                            .font(.body)
-                                        Spacer()
-                                    }
-                                    .padding(.vertical, 8)
-                                    .padding(.horizontal, 12)
-                                }
-                            }
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
-                            .padding(.horizontal)
-                        }
-                    } else {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("Run Clubs")
-                                .font(.headline)
-                                .padding(.horizontal)
-                            
-                            Text("Not a member of any run clubs")
-                                .font(.body)
-                                .foregroundColor(.secondary)
-                                .padding()
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .background(Color(.systemGray6))
-                                .cornerRadius(12)
-                                .padding(.horizontal)
-                        }
-                    }
-                } else {
-                    Text("Profile not found")
-                        .foregroundColor(.secondary)
-                        .padding()
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    .padding(.bottom, 100)
                 }
+            } else {
+                errorStateView
             }
-            .padding(.vertical)
         }
-        .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text("@\(username)")
+                    .font(.headline)
+                    .foregroundColor(.white)
+            }
+        }
+        .toolbarBackground(Color.black, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .alert("Error", isPresented: $showError) {
             Button("OK", role: .cancel) { }
         } message: {
@@ -173,12 +69,223 @@ struct ProfileDetailView: View {
         }
     }
     
-    // MARK: - Helper Methods
+    // MARK: - Profile Header
+    private func profileHeader(profile: Profile) -> some View {
+        VStack(spacing: 16) {
+            ProfilePictureView(
+                imageUrl: profile.profile_picture_url,
+                username: profile.username,
+                size: 100
+            )
+            
+            VStack(spacing: 8) {
+                Text("@\(profile.username)")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                
+                Text("\(profile.first_name) \(profile.last_name)")
+                    .font(.headline)
+                    .foregroundColor(.gray)
+                
+                if let location = profile.location, !location.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "location.fill")
+                            .font(.caption)
+                        Text(location)
+                            .font(.subheadline)
+                    }
+                    .foregroundColor(.gray)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+    }
     
+    // MARK: - Friend Action Button
+    private var friendActionButton: some View {
+        Button(action: {
+            Task {
+                if isFriend {
+                    await removeFriend()
+                } else {
+                    await addFriend()
+                }
+            }
+        }) {
+            HStack {
+                Image(systemName: isFriend ? "person.fill.xmark" : "person.fill.badge.plus")
+                Text(isFriend ? "Remove Friend" : "Add Friend")
+                    .fontWeight(.semibold)
+            }
+            .font(.headline)
+            .foregroundColor(isFriend ? .white : .black)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(isFriend ? Color.red.opacity(0.8) : Color.orange)
+            .cornerRadius(12)
+        }
+    }
+    
+    // MARK: - Stats Section
+    private func statsSection(stats: GlobalLeaderboardEntry) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Statistics")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            VStack(spacing: 12) {
+                statRow(
+                    icon: "flag.checkered",
+                    label: "Races Completed",
+                    value: "\(Int(stats.total_races_completed ?? 0))",
+                    color: .orange
+                )
+                
+                Divider()
+                    .background(Color.white.opacity(0.2))
+                
+                statRow(
+                    icon: "arrow.left.and.right",
+                    label: "Total Distance",
+                    value: String(format: "%.2f km", (stats.total_distance_covered ?? 0) / 1000),
+                    color: .orange
+                )
+                
+                Divider()
+                    .background(Color.white.opacity(0.2))
+                
+                statRow(
+                    icon: "trophy.fill",
+                    label: "Top 3 Finishes",
+                    value: "\(stats.top_three_finishes ?? 0)",
+                    color: .orange
+                )
+            }
+            .padding(20)
+            .background(Color.white.opacity(0.05))
+            .cornerRadius(16)
+        }
+    }
+    
+    private func statRow(icon: String, label: String, value: String, color: Color) -> some View {
+        HStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundColor(color)
+                .frame(width: 30)
+            
+            Text(label)
+                .font(.subheadline)
+                .foregroundColor(.gray)
+            
+            Spacer()
+            
+            Text(value)
+                .font(.headline)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+        }
+    }
+    
+    // MARK: - Run Clubs Section
+    private var runClubsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Run Clubs")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            if runClubs.isEmpty {
+                emptyClubsView
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(runClubs, id: \.self) { club in
+                        clubRow(club: club)
+                    }
+                }
+            }
+        }
+    }
+    
+    private func clubRow(club: String) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Color.orange.opacity(0.2))
+                    .frame(width: 44, height: 44)
+                
+                Image(systemName: "figure.run")
+                    .font(.system(size: 20))
+                    .foregroundColor(.orange)
+            }
+            
+            Text(club)
+                .font(.headline)
+                .foregroundColor(.white)
+            
+            Spacer()
+        }
+        .padding(16)
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(16)
+    }
+    
+    private var emptyClubsView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "figure.run.circle")
+                .font(.system(size: 40))
+                .foregroundColor(.gray.opacity(0.5))
+            
+            Text("Not a member of any run clubs")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(16)
+    }
+    
+    // MARK: - Loading View
+    private var loadingView: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(1.5)
+                .tint(.orange)
+            
+            Text("Loading profile...")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    // MARK: - Error State
+    private var errorStateView: some View {
+        VStack(spacing: 20) {
+            Image(systemName: "person.crop.circle.badge.exclamationmark")
+                .font(.system(size: 60))
+                .foregroundColor(.orange)
+            
+            Text("Profile Not Found")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            Text("We couldn't find this user's profile")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    // MARK: - Helper Methods
     private func loadProfileData() async {
         isLoading = true
         
-        // Load profile info
         profile = await viewModel.getInfo(appEnvironment: appEnvironment, username: username)
         
         guard profile != nil else {
@@ -188,13 +295,8 @@ struct ProfileDetailView: View {
             return
         }
         
-        // Load stats
         stats = await viewModel.getStats(appEnvironment: appEnvironment, username: username)
-        
-        // Load run clubs
         runClubs = await viewModel.getPersonalRunClubs(appEnvironment: appEnvironment, username: username)
-        
-        // Check if already a friend
         await checkFriendStatus()
         
         isLoading = false
@@ -217,31 +319,6 @@ struct ProfileDetailView: View {
     private func removeFriend() async {
         await viewModel.removeFriend(appEnvironment: appEnvironment, username: username)
         await checkFriendStatus()
-    }
-}
-
-// MARK: - Supporting Views
-
-struct StatRow: View {
-    let icon: String
-    let label: String
-    let value: String
-    
-    var body: some View {
-        HStack {
-            Image(systemName: icon)
-                .foregroundColor(.blue)
-                .frame(width: 24)
-            
-            Text(label)
-                .font(.body)
-            
-            Spacer()
-            
-            Text(value)
-                .font(.body)
-                .bold()
-        }
     }
 }
 
