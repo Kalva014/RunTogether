@@ -69,7 +69,18 @@ struct RunTabView: View {
                 }
             }
             .navigationBarHidden(true)
-            .background(navigationLink)
+            .fullScreenCover(isPresented: $navigateToRunning) {
+                if let raceId = createdRaceId {
+                    RunningView(
+                        mode: activeMode,
+                        isTreadmillMode: isTreadmillMode,
+                        distance: selectedDistance,
+                        useMiles: useMiles,
+                        raceId: raceId
+                    )
+                    .environmentObject(appEnvironment)
+                }
+            }
         }
     }
     
@@ -447,28 +458,6 @@ struct RunTabView: View {
         }
     }
     
-    private var navigationLink: some View {
-        NavigationLink(isActive: $navigateToRunning) {
-            Group {
-                if let raceId = createdRaceId {
-                    RunningView(
-                        mode: activeMode,
-                        isTreadmillMode: isTreadmillMode,
-                        distance: selectedDistance,
-                        useMiles: useMiles,
-                        raceId: raceId
-                    )
-                    .environmentObject(appEnvironment)
-                } else {
-                    EmptyView()
-                }
-            }
-        } label: {
-            EmptyView()
-        }
-        .hidden()
-    }
-    
     @MainActor
     private func handleCreateRace() async {
         showStartOptions = false
@@ -567,6 +556,15 @@ struct RoundedCorner: Shape {
         return Path(path.cgPath)
     }
 }
+
+#Preview {
+    RunTabView()
+        .environmentObject(AppEnvironment(
+            appUser: AppUser(id: UUID().uuidString, email: "test@example.com", username: "testuser"),
+            supabaseConnection: SupabaseConnection()
+        ))
+}
+
 
 #Preview {
     RunTabView()
