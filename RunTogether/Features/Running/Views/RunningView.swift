@@ -4,6 +4,10 @@
 //
 //  Created by Kenneth Alvarez on 8/27/25.
 //
+
+// ==========================================
+// MARK: - RunningView.swift - COMPLETE
+// ==========================================
 import SwiftUI
 import SpriteKit
 
@@ -23,6 +27,7 @@ struct RunningView: View {
     @State private var showMenu = false
     @State private var showLeaveConfirmation = false
     @State private var showChat = false
+    @State private var showLeaderboard = false
     @Environment(\.dismiss) private var dismiss
     
     init(mode: String, isTreadmillMode: Bool, distance: String, useMiles: Bool, raceId: UUID? = nil) {
@@ -36,64 +41,46 @@ struct RunningView: View {
         _chatViewModel = StateObject(wrappedValue: ChatViewModel(raceId: raceId))
     }
 
-
     var body: some View {
         ZStack {
+            // Game scene
             SpriteView(scene: viewModel.raceScene)
+                .ignoresSafeArea()
 
-            playerStatsView()
-            leaderboardView()
+            // Overlay UI
+            VStack {
+                // Top stats
+                topStatsBar
+                
+                Spacer()
+                
+                // Bottom controls
+                if !viewModel.raceScene.isRaceOver {
+                    bottomControls
+                }
+            }
             
-            if isTreadmillMode {
-                treadmillControlsView()
+            // Leaderboard sidebar
+            if showLeaderboard {
+                leaderboardSidebar
             }
 
-            // Results button overlay when race is over
+            // Results button when race is over
             if viewModel.raceScene.isRaceOver {
-                VStack {
-                    Spacer()
-                    Button(action: { navigateToResults = true }) {
-                        Text("View Results")
-                            .font(.headline)
-                            .foregroundColor(.black)
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 20)
-                            .background(Color.yellow)
-                            .cornerRadius(12)
-                            .shadow(radius: 4)
-                    }
-                    .padding(.bottom, 40)
-                }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .animation(.spring(), value: viewModel.raceScene.isRaceOver)
+                resultsButton
             }
             
             // Menu overlay
             if showMenu {
-                menuOverlay()
+                menuOverlay
             }
             
             // Chat overlay
             if showChat {
-                ZStack {
-                    // Semi-transparent background that dismisses chat on tap
-                    Color.black.opacity(0.3)
-                        .ignoresSafeArea()
-                        .onTapGesture {
-                            withAnimation {
-                                showChat = false
-                            }
-                        }
-                    
-                    ChatView(viewModel: chatViewModel, isPresented: $showChat)
-                        .transition(.move(edge: .bottom))
-                        .allowsHitTesting(true)
-                }
-                .zIndex(100)
+                chatOverlay
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .ignoresSafeArea()
+        .navigationBarHidden(true)
         .onAppear {
             viewModel.raceScene.size = CGSize(
                 width: UIScreen.main.bounds.width,
@@ -103,25 +90,19 @@ struct RunningView: View {
             
             viewModel.setAppEnvironment(appEnvironment: appEnvironment)
             
-            // Start realtime updates if we have supabaseconnection and raceid
             Task {
                 if appEnvironment.supabaseConnection != nil {
                     await viewModel.startRealtime(appEnvironment: appEnvironment)
                     
-                    // Start chat subscription if raceId exists
                     if raceId != nil {
                         await chatViewModel.startChat(appEnvironment: appEnvironment)
                     }
-                } else {
-                    // fallback: no supabase connection available
-                    print("No SupabaseConnection available in environment.")
                 }
             }
         }
         .onDisappear {
             Task {
                 await viewModel.stopRealtime(appEnvironment: appEnvironment)
-                // Stop chat subscription when leaving the race
                 await chatViewModel.stopChat()
             }
         }
@@ -137,10 +118,9 @@ struct RunningView: View {
                         playerPlace: (viewModel.leaderboard.firstIndex(where: { $0.name == "You" }) ?? 0) + 1,
                         totalRunners: viewModel.leaderboard.count,
                         raceDistanceMeters: Double(viewModel.raceScene.raceDistance),
-                        useMiles: useMiles,
+                        useMiles: useMiles
                     ),
-                    raceId: raceId,
-                    onExitToHome: { dismiss() }
+                    raceId: raceId
                 )
             } label: { EmptyView() }
                 .hidden()
@@ -152,7 +132,6 @@ struct RunningView: View {
                     if let raceId = raceId {
                         await viewModel.stopRealtime(appEnvironment: appEnvironment)
                         await chatViewModel.stopChat()
-                        // Optionally call leaveRace on the backend if needed
                         try await appEnvironment.supabaseConnection.leaveRace(raceId: raceId)
                     }
                     dismiss()
@@ -163,231 +142,160 @@ struct RunningView: View {
         }
     }
 
-    // MARK: - Subviews
-    private func playerStatsView() -> some View {
-        VStack {
-            HStack {
+    // MARK: - Top Stats Bar
+    private var topStatsBar: some View {
+        HStack {
+            // Menu button
+            Button(action: { showMenu.toggle() }) {
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 24))
+                    .foregroundColor(.white)
+                    .padding(12)
+                    .background(Color.black.opacity(0.6))
+                    .cornerRadius(12)
+            }
+            
+            Spacer()
+            
+            // Stats
+            VStack(alignment: .trailing, spacing: 8) {
+                // Pace
+                HStack(spacing: 6) {
+                    Text(viewModel.playerPace)
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                    Text(useMiles ? "min/mi" : "min/km")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.black.opacity(0.6))
+                .cornerRadius(12)
+                
+                // Distance & Progress
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(viewModel.playerDistanceString)
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    
+                    Text(viewModel.playerProgressDetail)
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.black.opacity(0.6))
+                .cornerRadius(12)
+                
+                // Heart rate
+                HStack(spacing: 6) {
+                    Image(systemName: "heart.fill")
+                        .foregroundColor(.red)
+                        .scaleEffect(isHeartPulsing ? 1.2 : 1.0)
+                    
+                    Text("\(viewModel.playerHeartbeat)")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    
+                    Text("BPM")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.black.opacity(0.6))
+                .cornerRadius(12)
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
+                        isHeartPulsing = true
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 60)
+    }
+    
+    // MARK: - Bottom Controls
+    private var bottomControls: some View {
+        HStack(spacing: 16) {
+            // Leaderboard toggle
+            Button(action: { showLeaderboard.toggle() }) {
+                HStack {
+                    Image(systemName: "list.number")
+                    Text("Board")
+                }
+                .font(.headline)
+                .foregroundColor(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(showLeaderboard ? Color.orange : Color.black.opacity(0.6))
+                .cornerRadius(12)
+            }
+            
+            // Chat button
+            if raceId != nil {
+                Button(action: { showChat.toggle() }) {
+                    HStack {
+                        Image(systemName: "message.fill")
+                        Text("Chat")
+                    }
+                    .font(.headline)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(showChat ? Color.orange : Color.black.opacity(0.6))
+                    .cornerRadius(12)
+                }
+            }
+            
+            // Treadmill controls
+            if isTreadmillMode {
                 Spacer()
-                VStack(alignment: .trailing, spacing: 8) {
-                    HStack(spacing: 12) {
-                        // Chat button (only show if raceId exists)
-                        if raceId != nil {
-                            Button(action: {
-                                showChat.toggle()
-                            }) {
-                                Image(systemName: "message.fill")
-                                    .font(.system(size: 36))
-                                    .foregroundColor(.white)
-                            }
-                        }
-                        
-                        // Settings button
-                        Button(action: {
-                            showMenu.toggle()
-                        }) {
-                            Image(systemName: "gearshape")
-                                .font(.system(size: 36))
-                                .foregroundColor(.white)
-                        }
-                    }
-
-                    VStack(alignment: .trailing, spacing: 8) {
-                        // Pace
-                        Text("Pace: \(viewModel.playerPace) \(useMiles ? "min/mi" : "min/km")")
-                            .font(.footnote)
-                            .foregroundColor(.yellow)
-                            .bold()
-
-                        // Distance (formatted string)
-                        Text("Distance: \(viewModel.playerDistanceString)")
-                            .font(.caption)
-                            .foregroundColor(.white)
-
-                        // Progress % + covered/total
-                        Text(viewModel.playerProgressPercent)
-                            .font(.caption)
-                            .foregroundColor(.white)
-
-                        Text(viewModel.playerProgressDetail)
-                            .font(.caption2)
-                            .foregroundColor(.gray)
-
-                        // Live heartbeat
-                        HStack {
-                            Text("\(viewModel.playerHeartbeat) BPM")
-                                .font(.caption)
-                                .foregroundColor(.white)
-
-                            Image(systemName: "heart.fill")
-                                .font(.footnote)
-                                .foregroundColor(.red)
-                                .scaleEffect(isHeartPulsing ? 1.2 : 1.0)
-                                .onAppear {
-                                    withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) {
-                                        isHeartPulsing = true
-                                    }
-                                }
-                        }
-                    }
-                    .padding(8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.white.opacity(0.4), lineWidth: 2)
-                            .background(Color.black.opacity(0.2))
-                    )
-                    .cornerRadius(10)
-                }
-                .padding(.top, 40)
-                .padding(.trailing, 16)
+                treadmillControls
             }
-            Spacer()
         }
-    }
-
-
-    private func leaderboardView() -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if mode == "Race" {
-                Text("Leaderboard")
-                    .font(.headline)
-                    .foregroundColor(.yellow)
-                    .padding(.leading, 16)
-            }
-            else if mode == "Casual" {
-                Text("Runners")
-                    .font(.headline)
-                    .foregroundColor(.yellow)
-                    .padding(.leading, 16)
-            }
-
-            ScrollView(.vertical) {
-                VStack(spacing: 4) {
-                    ForEach(Array(viewModel.leaderboard.enumerated()), id: \.element.id) { index, runner in
-                        leaderboardRow(index: index, runner: runner)
-                    }
-                }
-            }
-            .frame(maxHeight: 180)
-            .frame(width: 200)
-        }
-        .padding(.top, 50)
-        .padding(.leading, 16)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 40)
     }
     
-    private func leaderboardRow(index: Int, runner: RunnerData) -> some View {
-        HStack(spacing: 4) {
-            Text("\(index + 1)")
-                .frame(width: 20, alignment: .leading)
-                .foregroundColor(.yellow)
-
-            Text(runner.name)
-                .frame(maxWidth: 60, alignment: .leading)
-                .lineLimit(1)
-
-            Text(viewModel.formattedDistance(runner.distance))
-                .frame(width: 45, alignment: .trailing)
-
-            Text(rowExtraText(index: index, runner: runner))
-                .frame(width: 50, alignment: .trailing)
-        }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 6)
-        .background(runner.finishTime != nil
-                    ? Color.green.opacity(0.5)
-                    : Color.black.opacity(0.4))
-        .cornerRadius(8)
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
-        )
-        .font(.system(size: 10))
-        .foregroundColor(.white)
-    }
-
-    private func rowExtraText(index: Int, runner: RunnerData) -> String {
-        if useMiles == false {
-            if index == 0 {
-                if let time = runner.finishTime {
-                    return viewModel.raceScene.formatTime(time)
-                } else {
-                    return "\(runner.pace) min/km"
-                }
-            } else {
-                if let leaderTime = viewModel.leaderboard.first?.finishTime,
-                   let time = runner.finishTime {
-                    let gap = time - leaderTime
-                    return "+\(viewModel.raceScene.formatTime(gap))"
-                } else {
-                    return "\(runner.pace) min/km"
-                }
+    // MARK: - Treadmill Controls
+    private var treadmillControls: some View {
+        HStack(spacing: 12) {
+            RepeatButton(action: {
+                viewModel.updateTreadmillPace(change: 0.25)
+            }) {
+                Image(systemName: "minus.circle.fill")
+                    .font(.system(size: 44))
+                    .foregroundColor(.white)
+            }
+            
+            VStack(spacing: 4) {
+                Text(String(format: "%.2f", viewModel.treadmillPace))
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                Text("pace")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            .frame(width: 80)
+            
+            RepeatButton(action: {
+                viewModel.updateTreadmillPace(change: -0.25)
+            }) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 44))
+                    .foregroundColor(.white)
             }
         }
-        else {
-            if index == 0 {
-                if let time = runner.finishTime {
-                    return viewModel.raceScene.formatTime(time)
-                } else {
-                    return "\(runner.pace) min/mi"
-                }
-            } else {
-                if let leaderTime = viewModel.leaderboard.first?.finishTime,
-                   let time = runner.finishTime {
-                    let gap = time - leaderTime
-                    return "+\(viewModel.raceScene.formatTime(gap))"
-                } else {
-                    return "\(runner.pace) min/mi"
-                }
-            }
-        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(Color.black.opacity(0.8))
+        .cornerRadius(16)
     }
-
     
-    private func treadmillControlsView() -> some View {
-        VStack {
-            // Top Spacer pushes content down
-            Spacer()
-            
-            VStack(spacing: 20) {
-                
-                // Button to increase pace (decrease pace in min/km)
-                VStack {
-                    // `RepeatButton` for held-down functionality
-                    RepeatButton(action: {
-                        viewModel.updateTreadmillPace(change: -0.25)
-                    }) {
-                        Image(systemName: "figure.run.circle.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.white)
-                    }
-                    Text("Faster")
-                        .foregroundColor(.white)
-                        .font(.caption)
-                }
-                
-                // Button to decrease pace (increase pace in min/km)
-                VStack {
-                    // `RepeatButton` for held-down functionality
-                    RepeatButton(action: {
-                        viewModel.updateTreadmillPace(change: 0.25)
-                    }) {
-                        Image(systemName: "figure.walk.circle.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.white)
-                    }
-                    Text("Slower")
-                        .foregroundColor(.white)
-                        .font(.caption)
-                }
-            }
-            .padding(.trailing, 20)
-            
-            // Bottom Spacer pushes content up
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, alignment: .trailing)
-    }
-
     struct RepeatButton<Content: View>: View {
         var action: () -> Void
         var content: () -> Content
@@ -398,14 +306,11 @@ struct RunningView: View {
             content()
                 .onLongPressGesture(minimumDuration: 0.2, pressing: { isPressing in
                     if isPressing {
-                        // Initial action on press
                         action()
-                        // Start the timer to repeat the action
                         self.timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
                             action()
                         }
                     } else {
-                        // Stop the timer when the press ends
                         self.timer?.invalidate()
                         self.timer = nil
                     }
@@ -413,17 +318,117 @@ struct RunningView: View {
         }
     }
     
-    // MARK: - Menu Overlay
-    private func menuOverlay() -> some View {
-        ZStack {
-            // Semi-transparent background
-            Color.black.opacity(0.6)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    showMenu = false
+    // MARK: - Leaderboard Sidebar
+    private var leaderboardSidebar: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(mode == "Race" ? "Leaderboard" : "Runners")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    
+                    Spacer()
+                    
+                    Button(action: { showLeaderboard = false }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(.gray)
+                    }
                 }
+                
+                ScrollView {
+                    VStack(spacing: 8) {
+                        ForEach(Array(viewModel.leaderboard.enumerated()), id: \.element.id) { index, runner in
+                            leaderboardRow(index: index, runner: runner)
+                        }
+                    }
+                }
+            }
+            .padding(16)
+            .frame(width: 280)
+            .background(Color.black.opacity(0.9))
+            .cornerRadius(20, corners: [.topRight, .bottomRight])
             
-            // Menu content
+            Spacer()
+        }
+        .transition(.move(edge: .leading))
+        .animation(.spring(response: 0.3), value: showLeaderboard)
+    }
+    
+    private func leaderboardRow(index: Int, runner: RunnerData) -> some View {
+        HStack(spacing: 8) {
+            // Rank
+            Text("\(index + 1)")
+                .font(.caption)
+                .fontWeight(.bold)
+                .foregroundColor(runner.name == "You" ? .orange : .white)
+                .frame(width: 24)
+            
+            // Name
+            Text(runner.name)
+                .font(.subheadline)
+                .foregroundColor(runner.name == "You" ? .orange : .white)
+                .lineLimit(1)
+            
+            Spacer()
+            
+            // Distance or time
+            if let time = runner.finishTime {
+                Text(viewModel.raceScene.formatTime(time))
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.green)
+            } else {
+                Text(viewModel.formattedDistance(runner.distance))
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            runner.name == "You"
+                ? Color.orange.opacity(0.2)
+                : runner.finishTime != nil
+                    ? Color.green.opacity(0.1)
+                    : Color.white.opacity(0.05)
+        )
+        .cornerRadius(8)
+    }
+    
+    // MARK: - Results Button
+    private var resultsButton: some View {
+        VStack {
+            Spacer()
+            
+            Button(action: { navigateToResults = true }) {
+                HStack {
+                    Image(systemName: "flag.checkered")
+                    Text("View Results")
+                        .fontWeight(.bold)
+                }
+                .font(.headline)
+                .foregroundColor(.black)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(Color.orange)
+                .cornerRadius(16)
+                .shadow(color: Color.orange.opacity(0.5), radius: 10)
+            }
+            .padding(.horizontal, 40)
+            .padding(.bottom, 40)
+        }
+        .transition(.move(edge: .bottom))
+        .animation(.spring(response: 0.4), value: viewModel.raceScene.isRaceOver)
+    }
+    
+    // MARK: - Menu Overlay
+    private var menuOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.8)
+                .ignoresSafeArea()
+                .onTapGesture { showMenu = false }
+            
             VStack(spacing: 20) {
                 Text("Race Menu")
                     .font(.title2)
@@ -433,79 +438,86 @@ struct RunningView: View {
                 Divider()
                     .background(Color.white.opacity(0.3))
                 
-                // Copy Race ID button
                 if let raceId = raceId {
-                    Button(action: {
-                        UIPasteboard.general.string = raceId.uuidString
-                        showMenu = false
-                    }) {
+                    VStack(spacing: 12) {
+                        Text("Race ID")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        
                         HStack {
-                            Image(systemName: "doc.on.doc")
-                                .font(.title3)
-                            Text("Copy Race ID")
-                                .font(.headline)
+                            Text(raceId.uuidString)
+                                .font(.caption2)
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            
+                            Button(action: {
+                                UIPasteboard.general.string = raceId.uuidString
+                                showMenu = false
+                            }) {
+                                Image(systemName: "doc.on.doc")
+                                    .foregroundColor(.orange)
+                            }
                         }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.blue.opacity(0.8))
-                        .cornerRadius(10)
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(12)
                     }
-                    
-                    Text(raceId.uuidString)
-                        .font(.caption2)
-                        .foregroundColor(.gray)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
                 }
                 
-                // Leave Race button
                 Button(action: {
                     showMenu = false
                     showLeaveConfirmation = true
                 }) {
                     HStack {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
-                            .font(.title3)
                         Text("Leave Race")
-                            .font(.headline)
                     }
+                    .font(.headline)
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding()
+                    .padding(.vertical, 16)
                     .background(Color.red.opacity(0.8))
-                    .cornerRadius(10)
+                    .cornerRadius(12)
                 }
                 
-                // Close button
-                Button(action: {
-                    showMenu = false
-                }) {
+                Button(action: { showMenu = false }) {
                     Text("Close")
                         .font(.headline)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.gray.opacity(0.6))
-                        .cornerRadius(10)
+                        .padding(.vertical, 16)
+                        .background(Color.white.opacity(0.2))
+                        .cornerRadius(12)
                 }
             }
             .padding(30)
-            .background(
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(Color.black.opacity(0.9))
-                    .shadow(radius: 20)
-            )
+            .background(Color(white: 0.1))
+            .cornerRadius(20)
             .padding(.horizontal, 40)
         }
-        .transition(.opacity)
-        .animation(.easeInOut(duration: 0.3), value: showMenu)
+    }
+    
+    // MARK: - Chat Overlay
+    private var chatOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.3)
+                .ignoresSafeArea()
+                .onTapGesture { showChat = false }
+            
+            ChatView(viewModel: chatViewModel, isPresented: $showChat)
+        }
+        .transition(.move(edge: .bottom))
+        .animation(.spring(response: 0.3), value: showChat)
     }
 }
 
 #Preview {
     let supabaseConnection = SupabaseConnection()
 
-    RunningView(mode: "Casual", isTreadmillMode: true, distance: "1 Mile", useMiles: true)
-        .environmentObject(AppEnvironment(appUser: AppUser(id: UUID().uuidString, email: "test@example.com", username: "testuser"), supabaseConnection: supabaseConnection))
+    RunningView(mode: "Race", isTreadmillMode: false, distance: "5K", useMiles: false)
+        .environmentObject(AppEnvironment(
+            appUser: AppUser(id: UUID().uuidString, email: "test@example.com", username: "testuser"),
+            supabaseConnection: supabaseConnection
+        ))
 }

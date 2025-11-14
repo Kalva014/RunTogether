@@ -1,48 +1,79 @@
+// ==========================================
+// MARK: - HomeView.swift
+// ==========================================
 import SwiftUI
 
 struct HomeView: View {
     @EnvironmentObject var appEnvironment: AppEnvironment
-
+    @State private var selectedTab = 0
+    
     var body: some View {
-        TabView {
-            RunTabView()
-                .tabItem {
-                    Image(systemName: "figure.run")
-                    Text("Run")
-                }
-                .environmentObject(appEnvironment)
+        ZStack(alignment: .bottom) {
+            Color.black.ignoresSafeArea()
+
+            TabView(selection: $selectedTab) {
+                RunTabView()
+                    .tag(0)
+                    .environmentObject(appEnvironment)
+                
+                GroupTabView()
+                    .tag(1)
+                    .environmentObject(appEnvironment)
+                
+                FriendsTabView()
+                    .tag(2)
+                    .environmentObject(appEnvironment)
+                
+                LeaderboardTabView()
+                    .tag(3)
+                    .environmentObject(appEnvironment)
+                
+                ProfileTabView()
+                    .tag(4)
+                    .environmentObject(appEnvironment)
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
             
-            GroupTabView()
-                .tabItem {
-                    Image(systemName: "person.3.fill")
-                    Text("Groups")
-                }
-                .environmentObject(appEnvironment)
-            
-            FriendsTabView()
-                .tabItem {
-                    Image(systemName: "person.fill")
-                    Text("Friends")
-                }
-                .environmentObject(appEnvironment)
-            
-            LeaderboardTabView()
-                .tabItem {
-                    Image(systemName: "trophy.fill")
-                    Text("Leaderboards")
-                }
-                .environmentObject(appEnvironment)
-            
-            ProfileTabView()
-                .tabItem {
-                    Image(systemName: "person.crop.circle.fill")
-                    Text("Profile")
-                }
-                .environmentObject(appEnvironment)
+            customTabBar
         }
     }
+    
+    private var customTabBar: some View {
+        HStack(spacing: 0) {
+            tabButton(icon: "figure.run", title: "Run", tag: 0)
+            tabButton(icon: "person.3.fill", title: "Clubs", tag: 1)
+            tabButton(icon: "person.2.fill", title: "Friends", tag: 2)
+            tabButton(icon: "trophy.fill", title: "Board", tag: 3)
+            tabButton(icon: "person.circle.fill", title: "Profile", tag: 4)
+        }
+        .padding(.vertical, 8)
+        .background(
+            Color.black
+                .shadow(color: Color.white.opacity(0.1), radius: 10, x: 0, y: -5)
+        )
+    }
+    
+    private func tabButton(icon: String, title: String, tag: Int) -> some View {
+        Button(action: {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                selectedTab = tag
+            }
+        }) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 22))
+                    .foregroundColor(selectedTab == tag ? .orange : .gray)
+                
+                Text(title)
+                    .font(.caption2)
+                    .foregroundColor(selectedTab == tag ? .orange : .gray)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
 }
-
 #Preview {
     let supabaseConnection = SupabaseConnection()
     return HomeView()

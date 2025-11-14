@@ -4,6 +4,9 @@
 //
 //  Created by Kenneth Alvarez on 9/22/25.
 //
+// ==========================================
+// MARK: - LeaderboardTabView.swift
+// ==========================================
 import SwiftUI
 
 struct LeaderboardTabView: View {
@@ -11,73 +14,33 @@ struct LeaderboardTabView: View {
     @StateObject var viewModel = LeaderboardTabViewModel()
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // My Stats Card
-                if let myStats = viewModel.myStats {
-                    MyStatsCard(
-                        stats: myStats,
-                        rank: viewModel.myRank,
-                        displayName: viewModel.myDisplayName,
-                        profilePictureUrl: viewModel.myProfile?.profile_picture_url,
-                        username: viewModel.myProfile?.username ?? "User"
-                    )
-                    .padding()
-                }
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
                 
-                // Leaderboard List
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(Array(viewModel.leaderboardEntries.enumerated()), id: \.element.user_id) { index, entry in
-                            NavigationLink(destination: ProfileDetailView(username: viewModel.username(for: entry.user_id))) {
-                                LeaderboardRow(
-                                    entry: entry,
-                                    displayName: viewModel.displayName(for: entry.user_id),
-                                    rank: (viewModel.currentPage * viewModel.pageSize) + index + 1,
-                                    isCurrentUser: entry.user_id == appEnvironment.supabaseConnection.currentUserId,
-                                    profilePictureUrl: viewModel.profilePictureUrl(for: entry.user_id),
-                                    username: viewModel.username(for: entry.user_id)
-                                )
+                VStack(spacing: 0) {
+                    header
+                    
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            if let myStats = viewModel.myStats {
+                                myStatsCard(stats: myStats)
                             }
-                            .buttonStyle(PlainButtonStyle())
-                            .padding(.horizontal)
                             
-                            // Load more when reaching last item
-                            if index == viewModel.leaderboardEntries.count - 1 && viewModel.hasMorePages {
-                                ProgressView()
-                                    .onAppear {
-                                        Task {
-                                            await viewModel.loadNextPage(appEnvironment: appEnvironment)
-                                        }
-                                    }
-                            }
+                            leaderboardList
                         }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 100)
                     }
-                    .padding(.vertical)
-                }
-                .refreshable {
-                    await viewModel.refresh(appEnvironment: appEnvironment)
+                    .refreshable {
+                        await viewModel.refresh(appEnvironment: appEnvironment)
+                    }
                 }
             }
-            .navigationTitle("Global Leaderboard")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarHidden(true)
             .overlay {
                 if viewModel.isLoading && viewModel.leaderboardEntries.isEmpty {
-                    ProgressView("Loading leaderboard...")
-                }
-            }
-            .overlay {
-                if let errorMessage = viewModel.errorMessage {
-                    VStack {
-                        Text(errorMessage)
-                            .foregroundColor(.red)
-                            .padding()
-                        Button("Retry") {
-                            Task {
-                                await viewModel.refresh(appEnvironment: appEnvironment)
-                            }
-                        }
-                    }
+                    loadingView
                 }
             }
         }
@@ -85,159 +48,241 @@ struct LeaderboardTabView: View {
             await viewModel.refresh(appEnvironment: appEnvironment)
         }
     }
-}
-
-struct MyStatsCard: View {
-    let stats: GlobalLeaderboardEntry
-    let rank: Int?
-    let displayName: String
-    let profilePictureUrl: String?
-    let username: String
     
-    var body: some View {
-        VStack(spacing: 12) {
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Leaderboard")
+                .font(.system(size: 48, weight: .bold))
+                .foregroundColor(.white)
+            
+            Text("Global Rankings")
+                .font(.headline)
+                .foregroundColor(.gray)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.top, 60)
+        .padding(.bottom, 20)
+    }
+    
+    private func myStatsCard(stats: GlobalLeaderboardEntry) -> some View {
+        VStack(spacing: 16) {
             HStack {
-                ProfilePictureView(imageUrl: profilePictureUrl, username: username, size: 50)
+                ProfilePictureView(
+                    imageUrl: viewModel.myProfile?.profile_picture_url,
+                    username: viewModel.myProfile?.username ?? "User",
+                    size: 60
+                )
                 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(displayName)
-                        .font(.headline)
-                    Text("Your Stats")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-                if let rank = rank {
-                    Text("#\(rank)")
-                        .font(.title2)
+                    Text(viewModel.myDisplayName)
+                        .font(.title3)
                         .fontWeight(.bold)
-                        .foregroundColor(.blue)
+                        .foregroundColor(.white)
+                    
+                    if let rank = viewModel.myRank {
+                        HStack(spacing: 4) {
+                            Image(systemName: "trophy.fill")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                            Text("Rank #\(rank)")
+                                .font(.subheadline)
+                                .foregroundColor(.orange)
+                        }
+                    }
                 }
+                
+                Spacer()
             }
             
-            HStack(spacing: 20) {
-                StatItem(
-                    title: "Races",
-                    value: "\(Int(stats.total_races_completed ?? 0))"
+            Divider()
+                .background(Color.white.opacity(0.2))
+            
+            HStack(spacing: 0) {
+                statItem(
+                    value: "\(Int(stats.total_races_completed ?? 0))",
+                    label: "Races"
                 )
                 
                 Divider()
+                    .background(Color.white.opacity(0.2))
+                    .frame(height: 40)
                 
-                StatItem(
-                    title: "Distance",
-                    value: String(format: "%.1f km", (stats.total_distance_covered ?? 0) / 1000)
+                statItem(
+                    value: String(format: "%.1f", (stats.total_distance_covered ?? 0) / 1000),
+                    label: "Total km"
                 )
                 
                 Divider()
+                    .background(Color.white.opacity(0.2))
+                    .frame(height: 40)
                 
-                StatItem(
-                    title: "Top 3",
-                    value: "\(stats.top_three_finishes ?? 0)"
+                statItem(
+                    value: "\(stats.top_three_finishes ?? 0)",
+                    label: "Top 3"
                 )
             }
-            .frame(height: 60)
         }
-        .padding()
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
+        .padding(20)
+        .background(
+            LinearGradient(
+                colors: [Color.orange.opacity(0.3), Color.orange.opacity(0.1)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.orange.opacity(0.5), lineWidth: 1)
+        )
     }
-}
-
-struct StatItem: View {
-    let title: String
-    let value: String
     
-    var body: some View {
+    private func statItem(value: String, label: String) -> some View {
         VStack(spacing: 4) {
             Text(value)
-                .font(.title3)
-                .fontWeight(.semibold)
-            Text(title)
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            Text(label)
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.gray)
         }
         .frame(maxWidth: .infinity)
     }
-}
-
-struct LeaderboardRow: View {
-    let entry: GlobalLeaderboardEntry
-    let displayName: String
-    let rank: Int
-    let isCurrentUser: Bool
-    let profilePictureUrl: String?
-    let username: String
     
-    var body: some View {
+    private var leaderboardList: some View {
+        VStack(spacing: 12) {
+            ForEach(Array(viewModel.leaderboardEntries.enumerated()), id: \.element.user_id) { index, entry in
+                NavigationLink(destination: ProfileDetailView(username: viewModel.username(for: entry.user_id))) {
+                    leaderboardRow(
+                        entry: entry,
+                        rank: (viewModel.currentPage * viewModel.pageSize) + index + 1,
+                        isCurrentUser: entry.user_id == appEnvironment.supabaseConnection.currentUserId
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                
+                if index == viewModel.leaderboardEntries.count - 1 && viewModel.hasMorePages {
+                    ProgressView()
+                        .tint(.orange)
+                        .onAppear {
+                            Task {
+                                await viewModel.loadNextPage(appEnvironment: appEnvironment)
+                            }
+                        }
+                }
+            }
+        }
+    }
+    
+    private func leaderboardRow(entry: GlobalLeaderboardEntry, rank: Int, isCurrentUser: Bool) -> some View {
         HStack(spacing: 16) {
-            // Rank Badge
             ZStack {
                 Circle()
-                    .fill(rankColor)
-                    .frame(width: 40, height: 40)
+                    .fill(rankColor(rank: rank))
+                    .frame(width: 44, height: 44)
                 
-                Text("\(rank)")
-                    .font(.headline)
-                    .foregroundColor(.white)
+                if rank <= 3 {
+                    Image(systemName: rank == 1 ? "crown.fill" : "medal.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(.white)
+                } else {
+                    Text("\(rank)")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                }
             }
             
-            // Profile Picture
-            ProfilePictureView(imageUrl: profilePictureUrl, username: username, size: 44)
+            ProfilePictureView(
+                imageUrl: viewModel.profilePictureUrl(for: entry.user_id),
+                username: viewModel.username(for: entry.user_id),
+                size: 50
+            )
             
-            // User Stats
-            VStack(alignment: .leading, spacing: 4) {
-                Text(displayName)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(viewModel.displayName(for: entry.user_id))
                     .font(.headline)
-                    .foregroundColor(isCurrentUser ? .blue : .primary)
+                    .foregroundColor(isCurrentUser ? .orange : .white)
                 
-                HStack(spacing: 16) {
-                    Label("\(Int(entry.total_races_completed ?? 0))", systemImage: "flag.fill")
-                        .font(.caption)
+                HStack(spacing: 12) {
+                    statBadge(
+                        icon: "flag.fill",
+                        value: "\(Int(entry.total_races_completed ?? 0))"
+                    )
                     
-                    Label(String(format: "%.1f km", (entry.total_distance_covered ?? 0) / 1000), systemImage: "figure.run")
-                        .font(.caption)
+                    statBadge(
+                        icon: "figure.run",
+                        value: String(format: "%.0f km", (entry.total_distance_covered ?? 0) / 1000)
+                    )
                     
                     if let topThree = entry.top_three_finishes, topThree > 0 {
-                        Label("\(topThree)", systemImage: "trophy.fill")
-                            .font(.caption)
-                            .foregroundColor(.orange)
+                        statBadge(
+                            icon: "trophy.fill",
+                            value: "\(topThree)",
+                            color: .orange
+                        )
                     }
                 }
-                .foregroundColor(.secondary)
             }
             
             Spacer()
             
-            HStack(spacing: 8) {
-                if isCurrentUser {
-                    Image(systemName: "person.fill")
-                        .foregroundColor(.blue)
-                }
-                
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundColor(.gray)
         }
-        .padding()
-        .background(isCurrentUser ? Color.blue.opacity(0.1) : Color(.systemBackground))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(isCurrentUser ? Color.blue : Color.clear, lineWidth: 2)
+        .padding(16)
+        .background(
+            isCurrentUser
+                ? Color.orange.opacity(0.15)
+                : Color.white.opacity(0.05)
         )
-        .contentShape(Rectangle()) // Makes entire row tappable
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(
+                    isCurrentUser ? Color.orange.opacity(0.5) : Color.clear,
+                    lineWidth: isCurrentUser ? 1 : 0
+                )
+        )
     }
     
-    var rankColor: Color {
+    private func statBadge(icon: String, value: String, color: Color = .gray) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.caption2)
+            Text(value)
+                .font(.caption)
+        }
+        .foregroundColor(color)
+    }
+    
+    private func rankColor(rank: Int) -> Color {
         switch rank {
-        case 1: return .yellow
-        case 2: return .gray
-        case 3: return .orange
-        default: return .blue
+        case 1: return Color(red: 1.0, green: 0.84, blue: 0.0)
+        case 2: return Color(red: 0.75, green: 0.75, blue: 0.75)
+        case 3: return Color(red: 0.8, green: 0.5, blue: 0.2)
+        default: return Color.white.opacity(0.2)
         }
     }
+    
+    private var loadingView: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(1.5)
+                .tint(.orange)
+            
+            Text("Loading leaderboard...")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black.opacity(0.95))
+    }
 }
+
 
 #Preview {
     LeaderboardTabView()

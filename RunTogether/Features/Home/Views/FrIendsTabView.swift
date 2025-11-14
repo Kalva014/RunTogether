@@ -4,6 +4,10 @@
 //
 //  Created by Kenneth Alvarez on 10/15/25.
 //
+
+// ==========================================
+// MARK: - FriendsTabView.swift
+// ==========================================
 import SwiftUI
 
 struct FriendsTabView: View {
@@ -11,40 +15,25 @@ struct FriendsTabView: View {
     @StateObject var viewModel = FriendsTabViewModel()
     
     var body: some View {
-        NavigationView {
-            VStack {
-                if viewModel.isLoading {
-                    ProgressView("Loading friends...")
-                        .padding()
-                } else if let error = viewModel.errorMessage {
-                    VStack(spacing: 12) {
-                        Text(error)
-                            .foregroundColor(.red)
-                        Button("Retry") {
-                            Task {
-                                await viewModel.loadFriends(appEnvironment: appEnvironment)
-                            }
-                        }
-                    }
-                } else if viewModel.friends.isEmpty {
-                    ContentUnavailableView("No Friends Yet", systemImage: "person.2.slash.fill", description: Text("Add or accept friend requests to see them here."))
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: 12) {
-                            ForEach(viewModel.friends) { friend in
-                                NavigationLink(destination: ProfileDetailView(username: friend.username)) {
-                                    FriendRow(friend: friend)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                .padding(.horizontal)
-                            }
-                        }
-                        .padding(.vertical)
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    header
+                    
+                    if viewModel.isLoading {
+                        loadingView
+                    } else if let error = viewModel.errorMessage {
+                        errorView(message: error)
+                    } else if viewModel.friends.isEmpty {
+                        emptyStateView
+                    } else {
+                        friendsList
                     }
                 }
             }
-            .navigationTitle("Friends")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarHidden(true)
         }
         .task {
             await viewModel.loadFriends(appEnvironment: appEnvironment)
@@ -53,60 +42,178 @@ struct FriendsTabView: View {
             await viewModel.loadFriends(appEnvironment: appEnvironment)
         }
     }
-}
-
-struct FriendRow: View {
-    let friend: FriendsTabViewModel.FriendDisplay
     
-    @State private var copied = false
-    
-    var body: some View {
+    private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 16) {
-                ProfilePictureView(imageUrl: friend.profilePictureUrl, username: friend.username, size: 44)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(friend.username)
-                        .font(.headline)
-                    
-                    if let raceId = friend.activeRaceId {
-                        HStack(spacing: 6) {
-                            Text("🏁 In race:")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            Text(raceId.uuidString.prefix(8) + "…")
-                                .font(.caption2)
-                                .foregroundColor(.blue)
-                            
-                            Button(action: {
-                                UIPasteboard.general.string = raceId.uuidString
-                                withAnimation { copied = true }
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                                    withAnimation { copied = false }
-                                }
-                            }) {
-                                Image(systemName: copied ? "checkmark.circle.fill" : "doc.on.doc")
-                                    .font(.caption)
-                                    .foregroundColor(copied ? .green : .secondary)
-                            }
-                        }
+            Text("Friends")
+                .font(.system(size: 48, weight: .bold))
+                .foregroundColor(.white)
+            
+            Text("\(viewModel.friends.count) connected")
+                .font(.headline)
+                .foregroundColor(.gray)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.top, 60)
+        .padding(.bottom, 20)
+    }
+    
+    private var friendsList: some View {
+        ScrollView {
+            VStack(spacing: 12) {
+                ForEach(viewModel.friends) { friend in
+                    NavigationLink(destination: ProfileDetailView(username: friend.username)) {
+                        friendRow(friend: friend)
                     }
+                    .buttonStyle(PlainButtonStyle())
                 }
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 100)
+        }
+    }
+    
+    private func friendRow(friend: FriendsTabViewModel.FriendDisplay) -> some View {
+        HStack(spacing: 16) {
+            ProfilePictureView(
+                imageUrl: friend.profilePictureUrl,
+                username: friend.username,
+                size: 56
+            )
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text(friend.username)
+                    .font(.headline)
+                    .foregroundColor(.white)
                 
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .foregroundColor(.secondary)
+                if let raceId = friend.activeRaceId {
+                    activeRaceBadge(raceId: raceId)
+                } else {
+                    Text("Offline")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
+            }
+            
+            Spacer()
+            
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundColor(.gray)
+        }
+        .padding(16)
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(16)
+    }
+    
+    private func activeRaceBadge(raceId: UUID) -> some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(Color.green)
+                .frame(width: 8, height: 8)
+                .overlay(
+                    Circle()
+                        .stroke(Color.green.opacity(0.3), lineWidth: 2)
+                        .scaleEffect(1.5)
+                )
+            
+            Text("In a race")
+                .font(.subheadline)
+                .foregroundColor(.green)
+            
+            Button(action: {
+                UIPasteboard.general.string = raceId.uuidString
+            }) {
+                Image(systemName: "square.on.square")
                     .font(.caption)
+                    .foregroundColor(.orange)
+                    .padding(6)
+                    .background(Color.orange.opacity(0.2))
+                    .cornerRadius(6)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+    }
+    
+    private var loadingView: some View {
+        VStack(spacing: 16) {
+            ProgressView()
+                .scaleEffect(1.5)
+                .tint(.orange)
+            
+            Text("Loading friends...")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private func errorView(message: String) -> some View {
+        VStack(spacing: 20) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 60))
+                .foregroundColor(.orange)
+            
+            Text("Oops!")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            Text(message)
+                .font(.subheadline)
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+            
+            Button(action: {
+                Task {
+                    await viewModel.loadFriends(appEnvironment: appEnvironment)
+                }
+            }) {
+                Text("Try Again")
+                    .font(.headline)
+                    .foregroundColor(.black)
+                    .frame(width: 200)
+                    .padding(.vertical, 16)
+                    .background(Color.orange)
+                    .cornerRadius(12)
             }
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    private var emptyStateView: some View {
+        VStack(spacing: 24) {
+            Image(systemName: "person.2.slash")
+                .font(.system(size: 80))
+                .foregroundColor(.gray.opacity(0.5))
+            
+            VStack(spacing: 8) {
+                Text("No Friends Yet")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                
+                Text("Add friends to see their activity and join races together")
+                    .font(.subheadline)
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+            
+            VStack(spacing: 12) {
+                Text("Find friends by searching for their username in the search feature")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 40)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.bottom, 100)
     }
 }
-
 
 #Preview {
     let supabaseConnection = SupabaseConnection()

@@ -2,6 +2,10 @@
 //  RunTabView.swift
 //  RunTogether
 //
+
+// ==========================================
+// MARK: - RunTabView.swift
+// ==========================================
 import SwiftUI
 
 struct RunTabView: View {
@@ -17,6 +21,7 @@ struct RunTabView: View {
     
     @State private var navigateToRunning = false
     @State private var activeMode: String = "Race"
+    @State private var showStartOptions = false
     
     var distanceOptions: [String] {
         useMiles
@@ -38,172 +43,412 @@ struct RunTabView: View {
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    userInfoSection
-                    startTimeSection
-                    unitsSection
-                    distanceSection
+            ZStack {
+                Color.black.ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    headerView
                     
-                    Toggle("Treadmill Mode", isOn: $isTreadmillMode)
-                        .padding(.horizontal)
-                    
-                    Divider()
-                    
-                    raceCreationSection
-                    Divider()
-                    
-                    casualRunSection
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            heroSection
+                            quickStartSection
+                            guidedRunsSection
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 100)
+                    }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.top)
+                
+                if viewModel.isWaiting {
+                    waitingOverlay
+                }
+                
+                if showStartOptions {
+                    startOptionsSheet
+                }
             }
-            .scrollDismissesKeyboard(.interactively)
-            .background(Color(.systemGroupedBackground))
-            .overlay(waitingOverlay)
+            .navigationBarHidden(true)
             .background(navigationLink)
-            .navigationTitle("Run Together")
-            .navigationBarTitleDisplayMode(.inline)
         }
     }
-}
-
-// MARK: - Sections
-
-private extension RunTabView {
     
-    var userInfoSection: some View {
-        Group {
+    private var headerView: some View {
+        HStack {
+            Image(systemName: "figure.run")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(.white)
+            
+            Spacer()
+            
             if let user = appEnvironment.appUser {
-                VStack(spacing: 5) {
-                    Text("Welcome, \(user.username)!")
-                        .font(.title2).bold()
-                    Text("Email: \(user.email)")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                NavigationLink(destination: ProfileTabView()) {
+                    HStack(spacing: 8) {
+                        Text(user.username)
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                        
+                        Circle()
+                            .fill(Color.orange)
+                            .frame(width: 32, height: 32)
+                            .overlay(
+                                Text(String(user.username.prefix(1)).uppercased())
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(.white)
+                            )
+                    }
                 }
             }
         }
-        .padding(.top)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
     }
     
-    var startTimeSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Select Start Time").font(.headline)
-            DatePicker("", selection: $selectedTime, displayedComponents: .hourAndMinute)
-                .datePickerStyle(.wheel)
-        }
-        .padding(.horizontal)
-    }
-    
-    var unitsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Units").font(.headline)
-            Picker("Units", selection: $useMiles) {
-                Text("Kilometers").tag(false)
-                Text("Miles").tag(true)
-            }
-            .pickerStyle(.segmented)
-        }
-        .padding(.horizontal)
-    }
-    
-    var distanceSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Distance").font(.headline)
-            Picker("", selection: $selectedDistance) {
-                ForEach(distanceOptions, id: \.self) { Text($0) }
-            }
-            .pickerStyle(.menu)
-        }
-        .padding(.horizontal)
-    }
-}
-
-// MARK: - Race Creation Section
-
-private extension RunTabView {
-    
-    var raceCreationSection: some View {
-        VStack(spacing: 12) {
-            Button("Create Race") { Task { await handleCreateRace() }}
-                .buttonStyle(.borderedProminent)
+    private var heroSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Run")
+                .font(.system(size: 48, weight: .bold))
+                .foregroundColor(.white)
             
-            if let raceId = createdRaceId {
-                raceIdDisplay(raceId)
-            }
-            
-            VStack(spacing: 8) {
-                TextField("Paste Race ID to Join", text: $raceIdInput)
-                    .textFieldStyle(.roundedBorder)
-                Button("Join Race") { Task { await handleJoinSpecific() }}
-                    .buttonStyle(.borderedProminent)
-                    .disabled(raceIdInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .opacity(raceIdInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.6 : 1.0)
-            }
-            
-            Button("Join Random Race") { Task { await handleJoinRandom() }}
-                .buttonStyle(.bordered)
+            Text("Start a Run")
+                .font(.headline)
+                .foregroundColor(.gray)
         }
-        .padding(.horizontal)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 20)
     }
-}
-
-// MARK: - Casual Run Button
-
-private extension RunTabView {
     
-    var casualRunSection: some View {
-        Button("Start Casual Group Run") {
-            Task { await handleCasualRun() }
-        }
-        .buttonStyle(.borderedProminent)
-        .padding(.bottom, 40)
-    }
-}
-
-// MARK: - Overlay
-
-private extension RunTabView {
-    
-    @ViewBuilder var waitingOverlay: some View {
-        if viewModel.isWaiting {
-            VStack(spacing: 20) {
+    private var quickStartSection: some View {
+        VStack(spacing: 16) {
+            Button(action: {
+                showStartOptions = true
+            }) {
                 HStack {
-                    Button("Back") { viewModel.isWaiting = false }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Quick Start")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        
+                        Text("Just start running")
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                    }
+                    
                     Spacer()
+                    
+                    Image(systemName: "play.circle.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(.orange)
                 }
-                .padding(.leading)
+                .padding(20)
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(16)
+            }
+            
+            distanceSelector
+            
+            VStack(spacing: 12) {
+                HStack {
+                    Text("Treadmill Mode")
+                        .foregroundColor(.white)
+                    Spacer()
+                    Toggle("", isOn: $isTreadmillMode)
+                        .labelsHidden()
+                        .tint(.orange)
+                }
+                
+                Divider()
+                    .background(Color.white.opacity(0.2))
+                
+                HStack {
+                    Text("Use Miles")
+                        .foregroundColor(.white)
+                    Spacer()
+                    Toggle("", isOn: $useMiles)
+                        .labelsHidden()
+                        .tint(.orange)
+                }
+            }
+            .padding(20)
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(16)
+        }
+    }
+    
+    private var distanceSelector: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Distance")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(distanceOptions, id: \.self) { distance in
+                        Button(action: {
+                            selectedDistance = distance
+                        }) {
+                            Text(distance)
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+                                .foregroundColor(selectedDistance == distance ? .black : .white)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                                .background(selectedDistance == distance ? Color.orange : Color.white.opacity(0.1))
+                                .cornerRadius(20)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    private var guidedRunsSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Guided Plans")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            guidedRunCard(
+                title: "Race Mode",
+                subtitle: "Compete with others",
+                icon: "flag.checkered.2.crossed",
+                color: .orange
+            ) {
+                activeMode = "Race"
+                showStartOptions = true
+            }
+            
+            guidedRunCard(
+                title: "Casual Run",
+                subtitle: "Run at your pace",
+                icon: "figure.walk",
+                color: .blue
+            ) {
+                activeMode = "Casual"
+                showStartOptions = true
+            }
+            
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Join Race by ID")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                HStack {
+                    TextField("Paste Race ID", text: $raceIdInput)
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .padding()
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(12)
+                        .foregroundColor(.white)
+                    
+                    Button(action: {
+                        Task { await handleJoinSpecific() }
+                    }) {
+                        Image(systemName: "arrow.right.circle.fill")
+                            .font(.system(size: 40))
+                            .foregroundColor(.orange)
+                    }
+                    .disabled(raceIdInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .opacity(raceIdInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1.0)
+                }
+            }
+            .padding(20)
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(16)
+        }
+    }
+    
+    private func guidedRunCard(title: String, subtitle: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: icon)
+                            .font(.title2)
+                            .foregroundColor(color)
+                        
+                        Text(title)
+                            .font(.headline)
+                            .foregroundColor(.white)
+                    }
+                    
+                    Text(subtitle)
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
                 
                 Spacer()
-                ProgressView().scaleEffect(1.5)
-                Text(viewModel.countdownText).font(.headline)
+                
+                Image(systemName: "chevron.right")
+                    .foregroundColor(.gray)
+            }
+            .padding(20)
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(16)
+        }
+    }
+    
+    private var startOptionsSheet: some View {
+        ZStack {
+            Color.black.opacity(0.8)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    showStartOptions = false
+                }
+            
+            VStack(spacing: 0) {
+                Spacer()
+                
+                VStack(spacing: 20) {
+                    RoundedRectangle(cornerRadius: 3)
+                        .fill(Color.white.opacity(0.3))
+                        .frame(width: 40, height: 5)
+                        .padding(.top, 12)
+                    
+                    Text("Start Your Run")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                        .padding(.top, 8)
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Start Time")
+                            .font(.subheadline)
+                            .foregroundColor(.gray)
+                        
+                        DatePicker("", selection: $selectedTime, displayedComponents: .hourAndMinute)
+                            .datePickerStyle(.wheel)
+                            .labelsHidden()
+                            .colorScheme(.dark)
+                    }
+                    .padding(.vertical)
+                    
+                    VStack(spacing: 12) {
+                        if activeMode == "Race" {
+                            Button(action: {
+                                Task { await handleCreateRace() }
+                            }) {
+                                Text("Create New Race")
+                                    .font(.headline)
+                                    .foregroundColor(.black)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(Color.orange)
+                                    .cornerRadius(12)
+                            }
+                            
+                            Button(action: {
+                                Task { await handleJoinRandom() }
+                            }) {
+                                Text("Join Random Race")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(Color.white.opacity(0.2))
+                                    .cornerRadius(12)
+                            }
+                        } else {
+                            Button(action: {
+                                Task { await handleCasualRun() }
+                            }) {
+                                Text("Start Casual Run")
+                                    .font(.headline)
+                                    .foregroundColor(.black)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(Color.blue)
+                                    .cornerRadius(12)
+                            }
+                        }
+                        
+                        Button(action: {
+                            showStartOptions = false
+                        }) {
+                            Text("Cancel")
+                                .font(.headline)
+                                .foregroundColor(.gray)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                        }
+                    }
+                    .padding(.bottom, 20)
+                }
+                .padding(.horizontal, 20)
+                .background(Color(white: 0.15))
+                .cornerRadius(20, corners: [.topLeft, .topRight])
+            }
+        }
+        .transition(.move(edge: .bottom))
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showStartOptions)
+    }
+    
+    private var waitingOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.95)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 30) {
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.5)
+                        .tint(.orange)
+                    
+                    Text(viewModel.countdownText)
+                        .font(.system(size: 36, weight: .bold))
+                        .foregroundColor(.white)
+                    
+                    Text("Race starts soon...")
+                        .font(.headline)
+                        .foregroundColor(.gray)
+                }
                 
                 if let raceId = createdRaceId {
-                    raceIdDisplay(raceId)
+                    VStack(spacing: 12) {
+                        Text("Race ID")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        
+                        HStack {
+                            Text(raceId.uuidString)
+                                .font(.caption2)
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            
+                            Button(action: {
+                                UIPasteboard.general.string = raceId.uuidString
+                            }) {
+                                Image(systemName: "doc.on.doc")
+                                    .foregroundColor(.orange)
+                            }
+                        }
+                        .padding()
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 40)
                 }
                 
-                Button(createdRaceId != nil ? "Cancel Race" : "Leave Race") {
+                Button(action: {
                     Task { await handleCancel() }
+                }) {
+                    Text(createdRaceId != nil ? "Cancel Race" : "Leave Race")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Color.red.opacity(0.8))
+                        .cornerRadius(12)
                 }
-                .buttonStyle(.borderedProminent)
                 .padding(.horizontal, 40)
-                
-                Spacer()
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.ultraThinMaterial)
-            .ignoresSafeArea()
         }
     }
-}
-
-// MARK: - Navigation
-private extension RunTabView {
-    var navigationLink: some View {
-        NavigationLink(
-            isActive: $navigateToRunning
-        ) {
+    
+    private var navigationLink: some View {
+        NavigationLink(isActive: $navigateToRunning) {
             Group {
                 if let raceId = createdRaceId {
                     RunningView(
@@ -223,40 +468,10 @@ private extension RunTabView {
         }
         .hidden()
     }
-}
-
-
-
-// MARK: - Shared UI
-private extension RunTabView {
-    func raceIdDisplay(_ id: UUID) -> some View {
-        VStack(spacing: 5) {
-            Text("Race ID:")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            
-            HStack(spacing: 6) {
-                Text(id.uuidString)
-                    .font(.caption2)
-                    .multilineTextAlignment(.center)
-                
-                Button(action: {
-                    UIPasteboard.general.string = id.uuidString
-                }) {
-                    Image(systemName: "doc.on.doc")
-                }
-                .buttonStyle(.borderless)
-            }
-        }
-    }
-}
-
-// MARK: - Actions
-
-private extension RunTabView {
     
     @MainActor
-    func handleCreateRace() async {
+    private func handleCreateRace() async {
+        showStartOptions = false
         activeMode = "Race"
         guard let id = await viewModel.createRace(
             appEnvironment: appEnvironment,
@@ -265,15 +480,14 @@ private extension RunTabView {
             distance: distanceConversion[selectedDistance] ?? 5000
         ) else { return }
         
-        print("NAVIGATING — activeMode: \(activeMode), raceId: \(String(describing: id))")
-
         createdRaceId = id
         UIPasteboard.general.string = id.uuidString
         await waitForStart()
     }
     
     @MainActor
-    func handleJoinSpecific() async {
+    private func handleJoinSpecific() async {
+        showStartOptions = false
         activeMode = "Race"
         guard let race = await viewModel.joinSpecificRace(
             appEnvironment: appEnvironment,
@@ -286,7 +500,8 @@ private extension RunTabView {
     }
     
     @MainActor
-    func handleJoinRandom() async {
+    private func handleJoinRandom() async {
+        showStartOptions = false
         activeMode = "Race"
         guard let id = await viewModel.joinRandomRace(
             appEnvironment: appEnvironment,
@@ -295,15 +510,13 @@ private extension RunTabView {
             distance: distanceConversion[selectedDistance] ?? 5000
         ) else { return }
         
-        print("NAVIGATING — activeMode: \(activeMode), raceId: \(String(describing: id))")
-
-        
         createdRaceId = id
         await waitForStart()
     }
     
     @MainActor
-    func handleCasualRun() async {
+    private func handleCasualRun() async {
+        showStartOptions = false
         activeMode = "Casual"
         guard let id = await viewModel.joinRandomRace(
             appEnvironment: appEnvironment,
@@ -312,15 +525,12 @@ private extension RunTabView {
             distance: distanceConversion[selectedDistance] ?? 5000
         ) else { return }
         
-        print("NAVIGATING — activeMode: \(activeMode), raceId: \(String(describing: id))")
-
-        
         createdRaceId = id
         await waitForStart()
     }
     
     @MainActor
-    func handleCancel() async {
+    private func handleCancel() async {
         if let id = createdRaceId {
             await viewModel.cancelRace(appEnvironment: appEnvironment, raceId: id)
         }
@@ -330,7 +540,7 @@ private extension RunTabView {
     }
     
     @MainActor
-    func waitForStart() async {
+    private func waitForStart() async {
         viewModel.isWaiting = true
         await viewModel.waitUntilStartTime(startTime: selectedTime)
         viewModel.isWaiting = false
@@ -338,6 +548,25 @@ private extension RunTabView {
     }
 }
 
+extension View {
+    func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
+        clipShape(RoundedCorner(radius: radius, corners: corners))
+    }
+}
+
+struct RoundedCorner: Shape {
+    var radius: CGFloat = .infinity
+    var corners: UIRectCorner = .allCorners
+    
+    func path(in rect: CGRect) -> Path {
+        let path = UIBezierPath(
+            roundedRect: rect,
+            byRoundingCorners: corners,
+            cornerRadii: CGSize(width: radius, height: radius)
+        )
+        return Path(path.cgPath)
+    }
+}
 
 #Preview {
     RunTabView()

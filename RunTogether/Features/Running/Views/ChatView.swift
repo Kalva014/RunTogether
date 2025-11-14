@@ -4,7 +4,9 @@
 //
 //  Created by Kenneth Alvarez on 11/2/25.
 //
-
+// ==========================================
+// MARK: - ChatView.swift - COMPLETE
+// ==========================================
 import SwiftUI
 
 struct ChatView: View {
@@ -17,88 +19,23 @@ struct ChatView: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("Race Chat")
-                    .font(.headline)
-                    .foregroundColor(.white)
+            Spacer()
+            
+            VStack(spacing: 0) {
+                // Header
+                header
                 
-                Spacer()
+                // Messages
+                messagesView
                 
-                Button(action: {
-                    isPresented = false
-                }) {
-                    ZStack {
-                        Rectangle()
-                            .fill(Color.clear)
-                            .frame(width: 44, height: 44)
-                        
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title)
-                            .foregroundColor(.white)
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(PlainButtonStyle())
+                // Input
+                messageInput
             }
-            .padding()
-            .background(Color.black.opacity(0.9))
-            
-            Divider()
-                .background(Color.white.opacity(0.3))
-            
-            // Messages ScrollView
-            ScrollViewReader { proxy in
-                ScrollView {
-                    VStack(spacing: 12) {
-                        ForEach(viewModel.messages) { message in
-                            chatMessageRow(message: message)
-                                .id(message.id)
-                        }
-                    }
-                    .padding()
-                }
-                .background(Color.black.opacity(0.7))
-                .onChange(of: viewModel.messages.count) { _ in
-                    // Auto-scroll to bottom when new message arrives
-                    if let lastMessage = viewModel.messages.last {
-                        withAnimation {
-                            proxy.scrollTo(lastMessage.id, anchor: .bottom)
-                        }
-                    }
-                }
-            }
-            
-            Divider()
-                .background(Color.white.opacity(0.3))
-            
-            // Message Input
-            HStack(spacing: 12) {
-                TextField("Type a message...", text: $messageText)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .frame(height: 40)
-                
-                Button(action: {
-                    sendMessage()
-                }) {
-                    Image(systemName: "paperplane.fill")
-                        .font(.title3)
-                        .foregroundColor(.white)
-                        .frame(width: 44, height: 44)
-                        .background(messageText.isEmpty ? Color.gray : Color.blue)
-                        .cornerRadius(22)
-                }
-                .disabled(messageText.isEmpty)
-            }
-            .padding()
-            .background(Color.black.opacity(0.9))
+            .background(Color(white: 0.1))
+            .cornerRadius(20, corners: [.topLeft, .topRight])
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black.opacity(0.95))
-        .contentShape(Rectangle())
         .onAppear {
             Task {
-                // Fetch username when chat view appears
                 if let profile = try? await appEnvironment.supabaseConnection.getProfile() {
                     username = profile.username ?? "You"
                 }
@@ -106,40 +43,158 @@ struct ChatView: View {
         }
     }
     
+    // MARK: - Header
+    private var header: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Race Chat")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                Text("\(viewModel.messages.count) messages")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            
+            Spacer()
+            
+            Button(action: {
+                isPresented = false
+            }) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(.gray)
+            }
+        }
+        .padding(20)
+        .background(Color.black.opacity(0.5))
+    }
+    
+    // MARK: - Messages View
+    private var messagesView: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 12) {
+                    if viewModel.messages.isEmpty {
+                        emptyStateView
+                    } else {
+                        ForEach(viewModel.messages) { message in
+                            chatMessageRow(message: message)
+                                .id(message.id)
+                        }
+                    }
+                }
+                .padding(16)
+            }
+            .frame(height: 400)
+            .onChange(of: viewModel.messages.count) { _ in
+                if let lastMessage = viewModel.messages.last {
+                    withAnimation {
+                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Empty State
+    private var emptyStateView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 50))
+                .foregroundColor(.gray.opacity(0.5))
+            
+            Text("No messages yet")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+            
+            Text("Be the first to say something!")
+                .font(.caption)
+                .foregroundColor(.gray)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    
+    // MARK: - Message Row
     private func chatMessageRow(message: ChatMessage) -> some View {
         let isCurrentUser = message.userId == appEnvironment.supabaseConnection.currentUserId
         
         return HStack {
             if isCurrentUser {
-                Spacer()
+                Spacer(minLength: 60)
             }
             
-            VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: 4) {
-                Text(message.username)
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(isCurrentUser ? .yellow : .cyan)
+            VStack(alignment: isCurrentUser ? .trailing : .leading, spacing: 6) {
+                // Username and time
+                HStack(spacing: 8) {
+                    if !isCurrentUser {
+                        Text(message.username)
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.orange)
+                    }
+                    
+                    Text(formatTime(message.timestamp))
+                        .font(.caption2)
+                        .foregroundColor(.gray)
+                    
+                    if isCurrentUser {
+                        Text(message.username)
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.orange)
+                    }
+                }
                 
+                // Message bubble
                 Text(message.message)
-                    .font(.body)
+                    .font(.subheadline)
                     .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(isCurrentUser ? Color.blue.opacity(0.8) : Color.gray.opacity(0.6))
-                    .cornerRadius(16)
-                
-                Text(formatTime(message.timestamp))
-                    .font(.caption2)
-                    .foregroundColor(.gray)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        isCurrentUser
+                            ? Color.orange.opacity(0.8)
+                            : Color.white.opacity(0.15)
+                    )
+                    .cornerRadius(16, corners: isCurrentUser
+                        ? [.topLeft, .topRight, .bottomLeft]
+                        : [.topLeft, .topRight, .bottomRight]
+                    )
             }
             .frame(maxWidth: 250, alignment: isCurrentUser ? .trailing : .leading)
             
             if !isCurrentUser {
-                Spacer()
+                Spacer(minLength: 60)
             }
         }
     }
     
+    // MARK: - Message Input
+    private var messageInput: some View {
+        HStack(spacing: 12) {
+            TextField("Type a message...", text: $messageText)
+                .textFieldStyle(PlainTextFieldStyle())
+                .padding(12)
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(12)
+                .foregroundColor(.white)
+            
+            Button(action: sendMessage) {
+                Image(systemName: "paperplane.fill")
+                    .font(.title3)
+                    .foregroundColor(messageText.isEmpty ? .gray : .black)
+                    .frame(width: 44, height: 44)
+                    .background(messageText.isEmpty ? Color.gray.opacity(0.3) : Color.orange)
+                    .cornerRadius(22)
+            }
+            .disabled(messageText.isEmpty)
+        }
+        .padding(16)
+        .background(Color.black.opacity(0.5))
+    }
+    
+    // MARK: - Actions
     private func sendMessage() {
         let trimmedMessage = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedMessage.isEmpty else { return }
