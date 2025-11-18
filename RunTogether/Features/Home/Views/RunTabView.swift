@@ -84,6 +84,38 @@ struct RunTabView: View {
         }
     }
     
+    // New ProfileButton component for RunTabView:
+    struct ProfileButton: View {
+        @EnvironmentObject var appEnvironment: AppEnvironment
+        let username: String
+        @State private var profilePictureUrl: String?
+        
+        var body: some View {
+            NavigationLink(destination: ProfileTabView().environmentObject(appEnvironment)) {
+                HStack(spacing: 8) {
+                    Text(username)
+                        .font(.subheadline)
+                        .foregroundColor(.white)
+                    
+                    ProfilePictureView(
+                        imageUrl: profilePictureUrl,
+                        username: username,
+                        size: 32
+                    )
+                }
+            }
+            .task {
+                await loadProfilePicture()
+            }
+        }
+        
+        private func loadProfilePicture() async {
+            if let profile = try? await appEnvironment.supabaseConnection.getProfile() {
+                profilePictureUrl = profile.profile_picture_url
+            }
+        }
+    }
+    
     private var headerView: some View {
         HStack {
             Image(systemName: "figure.run")
@@ -93,27 +125,14 @@ struct RunTabView: View {
             Spacer()
             
             if let user = appEnvironment.appUser {
-                NavigationLink(destination: ProfileTabView()) {
-                    HStack(spacing: 8) {
-                        Text(user.username)
-                            .font(.subheadline)
-                            .foregroundColor(.white)
-                        
-                        Circle()
-                            .fill(Color.orange)
-                            .frame(width: 32, height: 32)
-                            .overlay(
-                                Text(String(user.username.prefix(1)).uppercased())
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(.white)
-                            )
-                    }
-                }
+                // Get current user's profile to show picture
+                ProfileButton(appEnvironment: _appEnvironment, username: user.username)
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
     }
+
     
     private var heroSection: some View {
         VStack(alignment: .leading, spacing: 12) {
