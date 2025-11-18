@@ -5,7 +5,7 @@
 //  Created by Kenneth Alvarez on 9/22/25.
 //
 // ==========================================
-// MARK: - ProfileTabView.swift
+// MARK: - ProfileTabView.swift - WITH PHOTO PERMISSIONS
 // ==========================================
 import SwiftUI
 import PhotosUI
@@ -25,6 +25,7 @@ struct ProfileTabView: View {
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var selectedImage: UIImage? = nil
     @State private var isUploadingImage = false
+    @State private var showPhotoPermissionAlert = false
     
     @State private var originalValues: (String, String, String, String, String?) = ("", "", "", "", nil)
     
@@ -43,6 +44,23 @@ struct ProfileTabView: View {
             originalValues = (username, firstName, lastName, location, profilePictureUrl)
         } catch {
             print("Failed to load user profile: \(error)")
+        }
+    }
+    
+    private func requestPhotoLibraryPermission() {
+        PHPhotoLibrary.requestAuthorization(for: .readWrite) { status in
+            DispatchQueue.main.async {
+                switch status {
+                case .authorized, .limited:
+                    print("✅ Photo library access granted")
+                case .denied, .restricted:
+                    showPhotoPermissionAlert = true
+                case .notDetermined:
+                    break
+                @unknown default:
+                    break
+                }
+            }
         }
     }
     
@@ -110,9 +128,21 @@ struct ProfileTabView: View {
                 } label: { EmptyView() }
                     .hidden()
             )
+            .alert("Photo Library Access Required", isPresented: $showPhotoPermissionAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+            } message: {
+                Text("Please enable photo library access in Settings to change your profile picture.")
+            }
         }
         .onAppear {
             Task { await loadUserData() }
+            // Request permission on first appearance
+            requestPhotoLibraryPermission()
         }
     }
     
@@ -147,10 +177,28 @@ struct ProfileTabView: View {
                     }
                     .onChange(of: selectedItem) { oldValue, newValue in
                         Task {
-                            if let data = try? await newValue?.loadTransferable(type: Data.self),
-                               let image = UIImage(data: data) {
-                                selectedImage = image
+                            // Check permission before loading photo
+                            let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+                            
+                            guard status == .authorized || status == .limited else {
+                                // Request permission if not granted
+                                PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
+                                    if newStatus == .authorized || newStatus == .limited {
+                                        Task {
+                                            await loadSelectedPhoto(from: newValue)
+                                        }
+                                    } else {
+                                        DispatchQueue.main.async {
+                                            showPhotoPermissionAlert = true
+                                            selectedItem = nil
+                                        }
+                                    }
+                                }
+                                return
                             }
+                            
+                            // Permission already granted, load photo
+                            await loadSelectedPhoto(from: newValue)
                         }
                     }
                 }
@@ -182,6 +230,17 @@ struct ProfileTabView: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+    
+    private func loadSelectedPhoto(from item: PhotosPickerItem?) async {
+        guard let item = item else { return }
+        
+        if let data = try? await item.loadTransferable(type: Data.self),
+           let image = UIImage(data: data) {
+            await MainActor.run {
+                selectedImage = image
+            }
+        }
     }
     
     private var statsSection: some View {
@@ -342,7 +401,6 @@ struct ProfileTabView: View {
         }
     }
 }
-
 
 #Preview {
     let supabaseConnection = SupabaseConnection()
