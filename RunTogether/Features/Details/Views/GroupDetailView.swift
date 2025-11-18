@@ -128,7 +128,7 @@ struct GroupDetailView: View {
     // MARK: - Action Buttons
     private var actionButtons: some View {
         VStack(spacing: 12) {
-            if viewModel.isOwner {
+            if viewModel.isOwner && viewModel.isMember {
                 Button(action: {
                     showDeleteConfirmation = true
                 }) {
