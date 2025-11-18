@@ -982,7 +982,10 @@ class SupabaseConnection: ObservableObject {
 
     /// List all run clubs the current user belongs to
     func listMyRunClubs() async throws -> [String] {
-        guard let userId = self.currentUserId else { return [] }
+        guard let userId = self.currentUserId else {
+            print("❌ No current user ID")
+            return []
+        }
 
         do {
             let memberships: [RunClubMember] = try await client
@@ -992,11 +995,12 @@ class SupabaseConnection: ObservableObject {
                 .execute()
                 .value ?? []
             
+            print("✅ Found \(memberships.count) memberships for user \(userId)")
             return memberships.map { $0.group_id }
         }
         catch {
-            print("Error listing run clubs: \(error)")
-            return []
+            print("❌ Error listing run clubs: \(error)")
+            throw error
         }
     }
     

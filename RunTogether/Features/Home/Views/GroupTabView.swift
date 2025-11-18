@@ -7,6 +7,15 @@
 // ==========================================
 // MARK: - GroupTabView.swift
 // ==========================================
+//
+//  GroupTabView.swift
+//  RunTogether
+//
+//  Created by Kenneth Alvarez on 9/22/25.
+//
+// ==========================================
+// MARK: - GroupTabView.swift - WITH MY CLUBS SECTION
+// ==========================================
 import SwiftUI
 
 struct GroupTabView: View {
@@ -17,6 +26,12 @@ struct GroupTabView: View {
     @State private var newClubName = ""
     @State private var newClubDescription = ""
     @State private var isSearching = false
+    @State private var activeTab: ClubTab = .myClubs
+    
+    enum ClubTab {
+        case myClubs
+        case discover
+    }
     
     init() {
         _viewModel = StateObject(wrappedValue: GroupTabViewModel())
@@ -45,9 +60,15 @@ struct GroupTabView: View {
             }
         }
         .task {
-            do {
-                try await viewModel.fetchRunClubs(appEnvironment: appEnvironment)
-            } catch {}
+            await loadClubs()
+        }
+    }
+    
+    private func loadClubs() async {
+        if activeTab == .myClubs {
+            try? await viewModel.fetchRunClubs(appEnvironment: appEnvironment)
+        } else {
+            try? await viewModel.fetchAllRunClubs(appEnvironment: appEnvironment)
         }
     }
     
@@ -59,7 +80,7 @@ struct GroupTabView: View {
                         .font(.system(size: 48, weight: .bold))
                         .foregroundColor(.white)
                     
-                    Text("\(viewModel.runClubs.count) clubs")
+                    Text(activeTab == .myClubs ? "\(viewModel.runClubs.count) clubs" : "Discover new clubs")
                         .font(.headline)
                         .foregroundColor(.gray)
                 }
@@ -74,6 +95,38 @@ struct GroupTabView: View {
                         .foregroundColor(.orange)
                 }
             }
+            
+            // Tab Switcher
+            HStack(spacing: 12) {
+                Button(action: {
+                    activeTab = .myClubs
+                    Task { await loadClubs() }
+                }) {
+                    Text("My Clubs")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(activeTab == .myClubs ? Color.orange : Color.clear)
+                        .cornerRadius(8)
+                }
+                
+                Button(action: {
+                    activeTab = .discover
+                    Task { await loadClubs() }
+                }) {
+                    Text("Discover")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(activeTab == .discover ? Color.orange : Color.clear)
+                        .cornerRadius(8)
+                }
+            }
+            .padding(4)
+            .background(Color.white.opacity(0.05))
+            .cornerRadius(12)
             
             HStack {
                 Image(systemName: "magnifyingglass")
@@ -95,9 +148,7 @@ struct GroupTabView: View {
                     Button(action: {
                         searchText = ""
                         isSearching = false
-                        Task {
-                            try? await viewModel.fetchRunClubs(appEnvironment: appEnvironment)
-                        }
+                        Task { await loadClubs() }
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .foregroundColor(.gray)
@@ -116,18 +167,22 @@ struct GroupTabView: View {
     private var clubsList: some View {
         ScrollView {
             VStack(spacing: 12) {
-                ForEach(viewModel.runClubs) { club in
-                    NavigationLink(destination: GroupDetailView(club: club)) {
-                        clubRow(club: club)
+                if viewModel.runClubs.isEmpty {
+                    emptyStateView
+                } else {
+                    ForEach(viewModel.runClubs) { club in
+                        NavigationLink(destination: GroupDetailView(club: club)) {
+                            clubRow(club: club)
+                        }
+                        .buttonStyle(PlainButtonStyle())
                     }
-                    .buttonStyle(PlainButtonStyle())
                 }
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 100)
         }
         .refreshable {
-            try? await viewModel.fetchRunClubs(appEnvironment: appEnvironment)
+            await loadClubs()
         }
     }
     
@@ -167,6 +222,26 @@ struct GroupTabView: View {
         .padding(16)
         .background(Color.white.opacity(0.05))
         .cornerRadius(16)
+    }
+    
+    private var emptyStateView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "person.3")
+                .font(.system(size: 50))
+                .foregroundColor(.gray.opacity(0.5))
+            
+            Text(activeTab == .myClubs ? "No clubs yet" : "No clubs to discover")
+                .font(.subheadline)
+                .foregroundColor(.gray)
+            
+            if activeTab == .myClubs {
+                Text("Join or create a club to get started")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 60)
     }
     
     private var createClubSheet: some View {
@@ -291,9 +366,7 @@ struct GroupTabView: View {
                 .padding(.horizontal, 40)
             
             Button(action: {
-                Task {
-                    try? await viewModel.fetchRunClubs(appEnvironment: appEnvironment)
-                }
+                Task { await loadClubs() }
             }) {
                 Text("Try Again")
                     .font(.headline)

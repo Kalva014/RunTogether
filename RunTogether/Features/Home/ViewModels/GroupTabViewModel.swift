@@ -4,6 +4,12 @@
 //
 //  Created by Kenneth Alvarez on 10/1/25.
 //
+//
+//  GroupTabViewModel.swift
+//  RunTogether
+//
+//  Created by Kenneth Alvarez on 10/1/25.
+//
 import Foundation
 import Supabase
 import SwiftUI
@@ -35,26 +41,54 @@ class GroupTabViewModel: ObservableObject {
         defer { isLoading = false }
         
         do {
+            // Get the club names the user is a member of
             let clubNames = try await appEnvironment.supabaseConnection.listMyRunClubs()
-            var clubs: [RunClub] = []
             
-            // Fetch details for each club
+            print("📋 User is member of clubs: \(clubNames)")
+            
+            // Fetch full details for each club
+            var clubs: [RunClub] = []
             for clubName in clubNames {
-                if let club = try? await appEnvironment.supabaseConnection.client
-                    .from("Run_Clubs")
-                    .select()
-                    .eq("name", value: clubName)
-                    .single()
-                    .execute()
-                    .value as? RunClub {
-                    clubs.append(club)
+                do {
+                    let fetchedClubs: [RunClub] = try await appEnvironment.supabaseConnection.client
+                        .from("Run_Clubs")
+                        .select()
+                        .eq("name", value: clubName)
+                        .execute()
+                        .value
+                    
+                    if let club = fetchedClubs.first {
+                        clubs.append(club)
+                        print("✅ Fetched club: \(club.name)")
+                    } else {
+                        print("⚠️ Club not found: \(clubName)")
+                    }
+                } catch {
+                    print("❌ Error fetching club \(clubName): \(error)")
                 }
             }
             
             runClubs = clubs
             errorMessage = nil
+            print("✅ Total clubs loaded: \(clubs.count)")
         } catch {
+            print("❌ Error in fetchRunClubs: \(error)")
             errorMessage = "Failed to fetch run clubs: \(error.localizedDescription)"
+            throw error
+        }
+    }
+    
+    func fetchAllRunClubs(appEnvironment: AppEnvironment) async throws {
+        isLoading = true
+        defer { isLoading = false }
+        
+        do {
+            runClubs = try await appEnvironment.supabaseConnection.listRunClubs()
+            errorMessage = nil
+            print("✅ Fetched all clubs: \(runClubs.count)")
+        } catch {
+            print("❌ Error fetching all clubs: \(error)")
+            errorMessage = "Failed to fetch clubs: \(error.localizedDescription)"
             throw error
         }
     }
@@ -81,9 +115,11 @@ class GroupTabViewModel: ObservableObject {
                 if !Task.isCancelled {
                     runClubs = clubs
                     errorMessage = nil
+                    print("🔍 Search results: \(clubs.count)")
                 }
             } catch {
                 if !Task.isCancelled {
+                    print("❌ Search error: \(error)")
                     errorMessage = "Search failed: \(error.localizedDescription)"
                 }
             }
