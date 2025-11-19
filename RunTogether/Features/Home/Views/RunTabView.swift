@@ -20,7 +20,6 @@ struct RunTabView: View {
     @State private var activeMode: String = "Race"
     @State private var showStartOptions = false
     
-    // Tooltip state
     @State private var showTooltip = false
     @State private var tooltipText = ""
 
@@ -53,7 +52,12 @@ struct RunTabView: View {
                     ScrollView {
                         VStack(spacing: 24) {
                             heroSection
-                            quickStartSection
+
+                            // ❌ QUICK START REMOVED
+                            
+                            distanceSelector
+                            treadmillAndMilesSection
+                            
                             guidedRunsSection
                         }
                         .padding(.horizontal, 20)
@@ -113,62 +117,33 @@ struct RunTabView: View {
         .padding(.top, 20)
     }
     
-    private var quickStartSection: some View {
-        VStack(spacing: 16) {
-            Button(action: {
-                showStartOptions = true
-            }) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Quick Start")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        
-                        Text("Just start running")
-                            .font(.subheadline)
-                            .foregroundColor(.gray)
-                    }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "play.circle.fill")
-                        .font(.system(size: 50))
-                        .foregroundColor(.orange)
-                }
-                .padding(20)
-                .background(Color.white.opacity(0.1))
-                .cornerRadius(16)
+    private var treadmillAndMilesSection: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("Treadmill Mode")
+                    .foregroundColor(.white)
+                Spacer()
+                Toggle("", isOn: $isTreadmillMode)
+                    .labelsHidden()
+                    .tint(.orange)
             }
             
-            distanceSelector
+            Divider().background(Color.white.opacity(0.2))
             
-            VStack(spacing: 12) {
-                HStack {
-                    Text("Treadmill Mode")
-                        .foregroundColor(.white)
-                    Spacer()
-                    Toggle("", isOn: $isTreadmillMode)
-                        .labelsHidden()
-                        .tint(.orange)
-                }
-                
-                Divider().background(Color.white.opacity(0.2))
-                
-                HStack {
-                    Text("Use Miles")
-                        .foregroundColor(.white)
-                    Spacer()
-                    Toggle("", isOn: $useMiles)
-                        .labelsHidden()
-                        .tint(.orange)
-                }
+            HStack {
+                Text("Use Miles")
+                    .foregroundColor(.white)
+                Spacer()
+                Toggle("", isOn: $useMiles)
+                    .labelsHidden()
+                    .tint(.orange)
             }
-            .padding(20)
-            .background(Color.white.opacity(0.1))
-            .cornerRadius(16)
         }
+        .padding(20)
+        .background(Color.white.opacity(0.1))
+        .cornerRadius(16)
     }
-    
+
     private var distanceSelector: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Distance")
@@ -255,7 +230,7 @@ struct RunTabView: View {
         }
     }
     
-    // MARK: - Updated guidedRunCard with disabled + tooltip
+    // Updated guidedRunCard with disabled + tooltip
     private func guidedRunCard(
         title: String,
         subtitle: String,
@@ -305,10 +280,9 @@ struct RunTabView: View {
             .background(Color.white.opacity(0.1))
             .cornerRadius(16)
         }
-        .disabled(false) // keep button tappable to show tooltip
+        .disabled(false)  // keep tappable for tooltip
     }
 
-    // Tooltip Overlay
     private var tooltipOverlay: some View {
         VStack {
             Spacer()
@@ -322,8 +296,7 @@ struct RunTabView: View {
         .transition(.opacity)
     }
 
-    
-    // MARK: - Start sheet & other functions unchanged
+    // START OPTIONS & RACE HANDLERS — unchanged
     private var startOptionsSheet: some View {
         ZStack {
             Color.black.opacity(0.8)
@@ -415,7 +388,6 @@ struct RunTabView: View {
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showStartOptions)
     }
 
-
     private var waitingOverlay: some View {
         ZStack {
             Color.black.opacity(0.95)
@@ -479,7 +451,6 @@ struct RunTabView: View {
         }
     }
     
-    // MARK: - Race Logic
     @MainActor
     private func handleCreateRace() async {
         if isTreadmillMode {
@@ -577,8 +548,7 @@ struct RunTabView: View {
     }
 }
 
-
-// MARK: - Corner Radius Extension
+// Corner radius
 extension View {
     func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
         clipShape(RoundedCorner(radius: radius, corners: corners))
@@ -602,7 +572,7 @@ struct RoundedCorner: Shape {
 #Preview {
     RunTabView()
         .environmentObject(AppEnvironment(
-            appUser: AppUser(id: UUID().uuidString, email: "test@example.com", username: "testuser"),
+            appUser: AppUser(id: UUID().uuidString, email: "test@example.com", username: "test"),
             supabaseConnection: SupabaseConnection()
         ))
 }
