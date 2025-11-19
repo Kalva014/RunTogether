@@ -13,6 +13,7 @@ struct Race: Codable, Identifiable {
     let start_time: Date
     let end_time: Date?
     let distance: Double
+    let use_miles: Bool
 }
 
 struct RaceParticipants: Codable, Identifiable {

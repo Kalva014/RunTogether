@@ -40,6 +40,43 @@ struct RunTabView: View {
         "Full Marathon (42.2K)": 42200.0
     ]
     
+    // Helper function to convert distance in meters back to string format
+    private func getDistanceString(from meters: Double, useMiles: Bool) -> String {
+        let tolerance: Double = 50.0 // Allow 50m tolerance for matching
+        
+        if useMiles {
+            let mileDistances: [(String, Double)] = [
+                ("1 Mile", 1609.34),
+                ("3.1 Miles", 4989.0),
+                ("6.2 Miles", 9979.0),
+                ("13.1 Miles", 21092.0),
+                ("26.2 Miles", 42195.0)
+            ]
+            
+            for (name, distance) in mileDistances {
+                if abs(meters - distance) <= tolerance {
+                    return name
+                }
+            }
+        } else {
+            let kmDistances: [(String, Double)] = [
+                ("5K", 5000.0),
+                ("10K", 10000.0),
+                ("Half Marathon (21.1K)", 21100.0),
+                ("Full Marathon (42.2K)", 42200.0)
+            ]
+            
+            for (name, distance) in kmDistances {
+                if abs(meters - distance) <= tolerance {
+                    return name
+                }
+            }
+        }
+        
+        // Fallback to default if no match found
+        return useMiles ? "3.1 Miles" : "5K"
+    }
+    
     var body: some View {
         NavigationStack {
             ZStack {
@@ -212,7 +249,7 @@ struct RunTabView: View {
             
             // Join by ID
             VStack(alignment: .leading, spacing: 12) {
-                Text("Join Race by ID")
+                Text("Join A Run by ID")
                     .font(.headline)
                     .foregroundColor(.white)
                 
@@ -489,7 +526,8 @@ struct RunTabView: View {
             appEnvironment: appEnvironment,
             mode: "Race",
             start_time: selectedTime,
-            distance: distanceConversion[selectedDistance] ?? 5000
+            distance: distanceConversion[selectedDistance] ?? 5000,
+            useMiles: useMiles
         ) else { return }
         
         createdRaceId = id
@@ -505,7 +543,8 @@ struct RunTabView: View {
             appEnvironment: appEnvironment,
             mode: "Casual",
             start_time: selectedTime,
-            distance: distanceConversion[selectedDistance] ?? 5000
+            distance: distanceConversion[selectedDistance] ?? 5000,
+            useMiles: useMiles
         ) else { return }
         
         createdRaceId = id
@@ -515,13 +554,19 @@ struct RunTabView: View {
     @MainActor
     private func handleJoinSpecific() async {
         showStartOptions = false
-        guard let race = await viewModel.joinSpecificRace(
+        guard let result = await viewModel.joinSpecificRace(
             appEnvironment: appEnvironment,
             raceId: raceIdInput
         ) else { return }
         
-        createdRaceId = race
-        await viewModel.waitForRaceToStart(appEnvironment: appEnvironment, raceId: race.uuidString)
+        // Sync race settings (except treadmill mode)
+        let race = result.race
+        selectedDistance = getDistanceString(from: race.distance, useMiles: race.use_miles)
+        useMiles = race.use_miles
+        // Note: isTreadmillMode is NOT synced as per user requirements
+        
+        createdRaceId = result.raceId
+        await viewModel.waitForRaceToStart(appEnvironment: appEnvironment, raceId: result.raceId.uuidString)
         navigateToRunning = true
     }
     
@@ -533,7 +578,8 @@ struct RunTabView: View {
             appEnvironment: appEnvironment,
             mode: "Race",
             start_time: selectedTime,
-            distance: distanceConversion[selectedDistance] ?? 5000
+            distance: distanceConversion[selectedDistance] ?? 5000,
+            useMiles: useMiles
         ) else { return }
 
         createdRaceId = id
@@ -548,7 +594,8 @@ struct RunTabView: View {
             appEnvironment: appEnvironment,
             mode: "Casual",
             start_time: selectedTime,
-            distance: distanceConversion[selectedDistance] ?? 5000
+            distance: distanceConversion[selectedDistance] ?? 5000,
+            useMiles: useMiles
         ) else { return }
 
         createdRaceId = id

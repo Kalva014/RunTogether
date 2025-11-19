@@ -263,14 +263,14 @@ class SupabaseConnection: ObservableObject {
     
     // MARK: - Multiplayer Methods
     // CREATE RACE
-    func createRace(name: String? = nil, mode: String, start_time: Date, distance: Double) async throws -> Race? {
+    func createRace(name: String? = nil, mode: String, start_time: Date, distance: Double, useMiles: Bool) async throws -> Race? {
         do {
             guard let userId = self.currentUserId else {
                 throw NSError(domain: "SupabaseConnection", code: 401,
                               userInfo: [NSLocalizedDescriptionKey: "User not signed in"])
             }
             
-            let brandNewRace = Race(id: nil, name: name, mode: mode, start_time: start_time, end_time: nil, distance: distance)
+            let brandNewRace = Race(id: nil, name: name, mode: mode, start_time: start_time, end_time: nil, distance: distance, use_miles: useMiles)
             
             // Decode as array, then get first
             let newRaces: [Race] = try await client
@@ -377,7 +377,7 @@ class SupabaseConnection: ObservableObject {
         }
     }
     
-    func joinRandomRace(mode: String, start_time: Date, maxParticipants: Int, distance: Double) async throws -> UUID? {
+    func joinRandomRace(mode: String, start_time: Date, maxParticipants: Int, distance: Double, useMiles: Bool) async throws -> UUID? {
         do {
             // Fetch open races matching the mode and distance
             let races: [Race] = try await self.client
@@ -405,7 +405,7 @@ class SupabaseConnection: ObservableObject {
             
             // If no suitable race found, create a new one
             print("ℹ️ No open race found for distance \(distance)m — creating a new one.")
-            let newRace = try await createRace(mode: mode, start_time: start_time, distance: distance)
+            let newRace = try await createRace(mode: mode, start_time: start_time, distance: distance, useMiles: useMiles)
             return newRace?.id
         }
         catch {

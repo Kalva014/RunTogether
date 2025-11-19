@@ -8,9 +8,9 @@ class RunTabViewModel: ObservableObject {
     
     private var countdownTimer: Timer?
     
-    func createRace(appEnvironment: AppEnvironment, mode: String, start_time: Date, distance: Double) async -> UUID? {
+    func createRace(appEnvironment: AppEnvironment, mode: String, start_time: Date, distance: Double, useMiles: Bool) async -> UUID? {
         do {
-            let newRace = try await appEnvironment.supabaseConnection.createRace(mode: mode, start_time: start_time, distance: distance)
+            let newRace = try await appEnvironment.supabaseConnection.createRace(mode: mode, start_time: start_time, distance: distance, useMiles: useMiles)
             return newRace?.id
         } catch {
             print("Error creating race: \(error.localizedDescription)")
@@ -18,24 +18,29 @@ class RunTabViewModel: ObservableObject {
         }
     }
     
-    func joinSpecificRace(appEnvironment: AppEnvironment, raceId: String) async -> UUID? {
+    func joinSpecificRace(appEnvironment: AppEnvironment, raceId: String) async -> (raceId: UUID, race: Race)? {
         do {
             guard let id = UUID(uuidString: raceId) else { return nil }
             let joined = try await appEnvironment.supabaseConnection.joinRaceWithCap(raceId: id, maxParticipants: 50)
-            return joined
+            guard let joinedId = joined else { return nil }
+            
+            // Fetch the race details to get the settings
+            let race = try await appEnvironment.supabaseConnection.getRaceDetails(raceId: joinedId)
+            return (raceId: joinedId, race: race)
         } catch {
             print("Error joining race: \(error.localizedDescription)")
             return nil
         }
     }
     
-    func joinRandomRace(appEnvironment: AppEnvironment, mode: String, start_time: Date, distance: Double) async -> UUID? {
+    func joinRandomRace(appEnvironment: AppEnvironment, mode: String, start_time: Date, distance: Double, useMiles: Bool) async -> UUID? {
         do {
             let raceId = try await appEnvironment.supabaseConnection.joinRandomRace(
                 mode: mode,
                 start_time: start_time,
                 maxParticipants: 50,
-                distance: distance
+                distance: distance,
+                useMiles: useMiles
             )
             return raceId
         } catch {
