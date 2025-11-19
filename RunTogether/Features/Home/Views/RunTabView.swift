@@ -20,9 +20,8 @@ struct RunTabView: View {
     @State private var activeMode: String = "Race"
     @State private var showStartOptions = false
     
-    @State private var showTooltip = false
-    @State private var tooltipText = ""
-
+    @State private var showRaceDisabledTooltip = false
+    
     var distanceOptions: [String] {
         useMiles
         ? ["1 Mile", "3.1 Miles", "6.2 Miles", "13.1 Miles", "26.2 Miles"]
@@ -52,12 +51,8 @@ struct RunTabView: View {
                     ScrollView {
                         VStack(spacing: 24) {
                             heroSection
-
-                            // ❌ QUICK START REMOVED
-                            
                             distanceSelector
-                            treadmillAndMilesSection
-                            
+                            treadmillSettingsSection
                             guidedRunsSection
                         }
                         .padding(.horizontal, 20)
@@ -73,8 +68,8 @@ struct RunTabView: View {
                     startOptionsSheet
                 }
                 
-                if showTooltip {
-                    tooltipOverlay
+                if showRaceDisabledTooltip {
+                    raceTooltip
                 }
             }
             .navigationBarHidden(true)
@@ -93,6 +88,8 @@ struct RunTabView: View {
         }
     }
     
+    // MARK: - Header
+    
     private var headerView: some View {
         HStack {
             Image(systemName: "figure.run")
@@ -102,7 +99,9 @@ struct RunTabView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
     }
-
+    
+    // MARK: - Hero
+    
     private var heroSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Run")
@@ -117,33 +116,8 @@ struct RunTabView: View {
         .padding(.top, 20)
     }
     
-    private var treadmillAndMilesSection: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Text("Treadmill Mode")
-                    .foregroundColor(.white)
-                Spacer()
-                Toggle("", isOn: $isTreadmillMode)
-                    .labelsHidden()
-                    .tint(.orange)
-            }
-            
-            Divider().background(Color.white.opacity(0.2))
-            
-            HStack {
-                Text("Use Miles")
-                    .foregroundColor(.white)
-                Spacer()
-                Toggle("", isOn: $useMiles)
-                    .labelsHidden()
-                    .tint(.orange)
-            }
-        }
-        .padding(20)
-        .background(Color.white.opacity(0.1))
-        .cornerRadius(16)
-    }
-
+    // MARK: - Distance Selector
+    
     private var distanceSelector: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Distance")
@@ -171,6 +145,37 @@ struct RunTabView: View {
         }
     }
     
+    // MARK: - Treadmill & Miles Switches
+    
+    private var treadmillSettingsSection: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("Treadmill Mode")
+                    .foregroundColor(.white)
+                Spacer()
+                Toggle("", isOn: $isTreadmillMode)
+                    .labelsHidden()
+                    .tint(.orange)
+            }
+            
+            Divider().background(Color.white.opacity(0.2))
+            
+            HStack {
+                Text("Use Miles")
+                    .foregroundColor(.white)
+                Spacer()
+                Toggle("", isOn: $useMiles)
+                    .labelsHidden()
+                    .tint(.orange)
+            }
+        }
+        .padding(20)
+        .background(Color.white.opacity(0.1))
+        .cornerRadius(16)
+    }
+    
+    // MARK: - Guided Plans
+    
     private var guidedRunsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Guided Plans")
@@ -178,18 +183,23 @@ struct RunTabView: View {
                 .fontWeight(.bold)
                 .foregroundColor(.white)
             
+            // RACE MODE CARD — disabled if treadmill on
             guidedRunCard(
                 title: "Race Mode",
                 subtitle: "Compete with others",
                 icon: "flag.checkered.2.crossed",
                 color: .orange,
-                disabled: isTreadmillMode,
-                tooltip: "Race Mode is disabled while Treadmill Mode is ON."
+                disabled: isTreadmillMode
             ) {
-                activeMode = "Race"
-                showStartOptions = true
+                if isTreadmillMode {
+                    showRaceDisabledTooltip = true
+                } else {
+                    activeMode = "Race"
+                    showStartOptions = true
+                }
             }
             
+            // CASUAL RUN CARD — always available
             guidedRunCard(
                 title: "Casual Run",
                 subtitle: "Run at your pace",
@@ -200,6 +210,7 @@ struct RunTabView: View {
                 showStartOptions = true
             }
             
+            // Join by ID
             VStack(alignment: .leading, spacing: 12) {
                 Text("Join Race by ID")
                     .font(.headline)
@@ -220,8 +231,8 @@ struct RunTabView: View {
                             .font(.system(size: 40))
                             .foregroundColor(.orange)
                     }
-                    .disabled(raceIdInput.trimmingCharacters(in: .whitespaces).isEmpty)
-                    .opacity(raceIdInput.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1.0)
+                    .disabled(raceIdInput.isEmpty)
+                    .opacity(raceIdInput.isEmpty ? 0.5 : 1)
                 }
             }
             .padding(20)
@@ -230,37 +241,24 @@ struct RunTabView: View {
         }
     }
     
-    // Updated guidedRunCard with disabled + tooltip
+    // MARK: - Guided Run Card
+    
     private func guidedRunCard(
         title: String,
         subtitle: String,
         icon: String,
         color: Color,
         disabled: Bool = false,
-        tooltip: String? = nil,
         action: @escaping () -> Void
     ) -> some View {
-        
-        Button(action: {
-            if disabled {
-                if let tooltip = tooltip {
-                    tooltipText = tooltip
-                    withAnimation { showTooltip = true }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation { showTooltip = false }
-                    }
-                }
-            } else {
-                action()
-            }
-        }) {
+        Button(action: action) {
             HStack {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Image(systemName: icon)
                             .font(.title2)
                             .foregroundColor(color.opacity(disabled ? 0.3 : 1))
-
+                        
                         Text(title)
                             .font(.headline)
                             .foregroundColor(disabled ? .gray : .white)
@@ -280,28 +278,39 @@ struct RunTabView: View {
             .background(Color.white.opacity(0.1))
             .cornerRadius(16)
         }
-        .disabled(false)  // keep tappable for tooltip
+        .disabled(disabled)
     }
-
-    private var tooltipOverlay: some View {
+    
+    // MARK: - Tooltip
+    
+    private var raceTooltip: some View {
         VStack {
             Spacer()
-            Text(tooltipText)
-                .padding()
-                .background(Color.black.opacity(0.8))
+            Text("Race Mode is disabled in Treadmill Mode")
+                .font(.headline)
                 .foregroundColor(.white)
-                .cornerRadius(10)
+                .padding()
+                .background(Color.red.opacity(0.9))
+                .cornerRadius(12)
                 .padding(.bottom, 50)
+                .transition(.opacity)
         }
-        .transition(.opacity)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                withAnimation { showRaceDisabledTooltip = false }
+            }
+        }
     }
-
-    // START OPTIONS & RACE HANDLERS — unchanged
+    
+    // MARK: - Start Options Sheet
+    
     private var startOptionsSheet: some View {
         ZStack {
             Color.black.opacity(0.8)
                 .ignoresSafeArea()
-                .onTapGesture { showStartOptions = false }
+                .onTapGesture {
+                    showStartOptions = false
+                }
             
             VStack(spacing: 0) {
                 Spacer()
@@ -316,8 +325,8 @@ struct RunTabView: View {
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
-                        .padding(.top, 8)
                     
+                    // Start Time
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Start Time")
                             .font(.subheadline)
@@ -331,6 +340,8 @@ struct RunTabView: View {
                     .padding(.vertical)
                     
                     VStack(spacing: 12) {
+                        
+                        // =========== RACE OPTIONS ============
                         if activeMode == "Race" {
                             Button(action: {
                                 Task { await handleCreateRace() }
@@ -355,11 +366,14 @@ struct RunTabView: View {
                                     .background(Color.white.opacity(0.2))
                                     .cornerRadius(12)
                             }
-                        } else {
+                        }
+                        
+                        // =========== CASUAL OPTIONS ============
+                        else {
                             Button(action: {
-                                Task { await handleCasualRun() }
+                                Task { await handleCreateCasualRun() }
                             }) {
-                                Text("Start Casual Run")
+                                Text("Create Casual Run")
                                     .font(.headline)
                                     .foregroundColor(.black)
                                     .frame(maxWidth: .infinity)
@@ -367,8 +381,21 @@ struct RunTabView: View {
                                     .background(Color.blue)
                                     .cornerRadius(12)
                             }
+                            
+                            Button(action: {
+                                Task { await handleJoinRandomCasual() }
+                            }) {
+                                Text("Join Random Run")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(Color.white.opacity(0.2))
+                                    .cornerRadius(12)
+                            }
                         }
                         
+                        // Cancel
                         Button(action: { showStartOptions = false }) {
                             Text("Cancel")
                                 .font(.headline)
@@ -387,11 +414,12 @@ struct RunTabView: View {
         .transition(.move(edge: .bottom))
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showStartOptions)
     }
-
+    
+    // MARK: - Waiting Overlay
+    
     private var waitingOverlay: some View {
         ZStack {
-            Color.black.opacity(0.95)
-                .ignoresSafeArea()
+            Color.black.opacity(0.95).ignoresSafeArea()
             
             VStack(spacing: 30) {
                 VStack(spacing: 16) {
@@ -403,14 +431,14 @@ struct RunTabView: View {
                         .font(.system(size: 36, weight: .bold))
                         .foregroundColor(.white)
                     
-                    Text("Race starts soon...")
+                    Text("Run starts soon...")
                         .font(.headline)
                         .foregroundColor(.gray)
                 }
                 
                 if let raceId = createdRaceId {
                     VStack(spacing: 12) {
-                        Text("Race ID")
+                        Text("Run ID")
                             .font(.caption)
                             .foregroundColor(.gray)
                         
@@ -427,18 +455,18 @@ struct RunTabView: View {
                                 Image(systemName: "doc.on.doc")
                                     .foregroundColor(.orange)
                             }
+
                         }
                         .padding()
                         .background(Color.white.opacity(0.1))
                         .cornerRadius(12)
                     }
-                    .padding(.horizontal, 40)
                 }
                 
                 Button(action: {
                     Task { await handleCancel() }
                 }) {
-                    Text(createdRaceId != nil ? "Cancel Race" : "Leave Race")
+                    Text("Cancel Run")
                         .font(.headline)
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
@@ -451,17 +479,10 @@ struct RunTabView: View {
         }
     }
     
+    // MARK: - Backend Actions
+    
     @MainActor
     private func handleCreateRace() async {
-        if isTreadmillMode {
-            tooltipText = "Race Mode is unavailable in Treadmill Mode."
-            withAnimation { showTooltip = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                withAnimation { showTooltip = false }
-            }
-            return
-        }
-
         showStartOptions = false
         activeMode = "Race"
         guard let id = await viewModel.createRace(
@@ -477,9 +498,23 @@ struct RunTabView: View {
     }
     
     @MainActor
+    private func handleCreateCasualRun() async {
+        showStartOptions = false
+        activeMode = "Casual"
+        guard let id = await viewModel.createRace(
+            appEnvironment: appEnvironment,
+            mode: "Casual",
+            start_time: selectedTime,
+            distance: distanceConversion[selectedDistance] ?? 5000
+        ) else { return }
+        
+        createdRaceId = id
+        await waitForStart()
+    }
+    
+    @MainActor
     private func handleJoinSpecific() async {
         showStartOptions = false
-        activeMode = "Race"
         guard let race = await viewModel.joinSpecificRace(
             appEnvironment: appEnvironment,
             raceId: raceIdInput
@@ -492,15 +527,6 @@ struct RunTabView: View {
     
     @MainActor
     private func handleJoinRandom() async {
-        if isTreadmillMode {
-            tooltipText = "Race Mode is unavailable in Treadmill Mode."
-            withAnimation { showTooltip = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                withAnimation { showTooltip = false }
-            }
-            return
-        }
-
         showStartOptions = false
         activeMode = "Race"
         guard let id = await viewModel.joinRandomRace(
@@ -509,13 +535,13 @@ struct RunTabView: View {
             start_time: selectedTime,
             distance: distanceConversion[selectedDistance] ?? 5000
         ) else { return }
-        
+
         createdRaceId = id
         await waitForStart()
     }
     
     @MainActor
-    private func handleCasualRun() async {
+    private func handleJoinRandomCasual() async {
         showStartOptions = false
         activeMode = "Casual"
         guard let id = await viewModel.joinRandomRace(
@@ -524,7 +550,7 @@ struct RunTabView: View {
             start_time: selectedTime,
             distance: distanceConversion[selectedDistance] ?? 5000
         ) else { return }
-        
+
         createdRaceId = id
         await waitForStart()
     }
@@ -548,7 +574,6 @@ struct RunTabView: View {
     }
 }
 
-// Corner radius
 extension View {
     func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
         clipShape(RoundedCorner(radius: radius, corners: corners))
@@ -567,12 +592,4 @@ struct RoundedCorner: Shape {
         )
         return Path(path.cgPath)
     }
-}
-
-#Preview {
-    RunTabView()
-        .environmentObject(AppEnvironment(
-            appUser: AppUser(id: UUID().uuidString, email: "test@example.com", username: "test"),
-            supabaseConnection: SupabaseConnection()
-        ))
 }
