@@ -60,6 +60,11 @@ struct RunningView: View {
                 }
             }
             
+            // Treadmill controls sidebar (right side)
+            if isTreadmillMode && !viewModel.raceScene.isRaceOver {
+                treadmillSidebar
+            }
+            
             // Leaderboard sidebar
             if showLeaderboard {
                 leaderboardSidebar
@@ -219,7 +224,10 @@ struct RunningView: View {
     
     // MARK: - Bottom Controls
     private var bottomControls: some View {
-        HStack(spacing: 16) {
+        // Main action buttons (centered)
+        HStack {
+            Spacer()
+            
             // Leaderboard toggle
             Button(action: { showLeaderboard.toggle() }) {
                 HStack {
@@ -250,50 +258,60 @@ struct RunningView: View {
                 }
             }
             
-            // Treadmill controls
-            if isTreadmillMode {
-                Spacer()
-                treadmillControls
-            }
+            Spacer()
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 40)
     }
     
-    // MARK: - Treadmill Controls
-    private var treadmillControls: some View {
-        HStack(spacing: 12) {
-            RepeatButton(action: {
-                viewModel.updateTreadmillPace(change: 0.25)
-            }) {
-                Image(systemName: "minus.circle.fill")
-                    .font(.system(size: 44))
-                    .foregroundColor(.white)
-            }
+    // MARK: - Treadmill Sidebar
+    private var treadmillSidebar: some View {
+        HStack {
+            Spacer()
             
-            VStack(spacing: 4) {
-                Text(String(format: "%.2f", viewModel.treadmillPace))
-                    .font(.title3)
-                    .fontWeight(.bold)
-                    .foregroundColor(.white)
-                Text("pace")
-                    .font(.caption)
-                    .foregroundColor(.gray)
+            VStack(spacing: 20) {
+                // Increase pace button (top)
+                RepeatButton(action: {
+                    viewModel.updateTreadmillPace(change: -0.25)
+                }) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 55))
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.3), radius: 2)
+                }
+                .frame(width: 70, height: 70)
+                
+                // Pace display
+                VStack(spacing: 6) {
+                    Text(String(format: "%.2f", viewModel.treadmillPace))
+                        .font(.title)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                    Text("pace")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                .frame(width: 80, height: 60)
+                .background(Color.black.opacity(0.8))
+                .cornerRadius(16)
+                
+                // Decrease pace button (bottom)
+                RepeatButton(action: {
+                    viewModel.updateTreadmillPace(change: 0.25)
+                }) {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.system(size: 55))
+                        .foregroundColor(.white)
+                        .shadow(color: .black.opacity(0.3), radius: 2)
+                }
+                .frame(width: 70, height: 70)
             }
-            .frame(width: 80)
-            
-            RepeatButton(action: {
-                viewModel.updateTreadmillPace(change: -0.25)
-            }) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 44))
-                    .foregroundColor(.white)
-            }
+            .padding(.vertical, 20)
+            .padding(.horizontal, 16)
+            .background(Color.black.opacity(0.6))
+            .cornerRadius(25)
+            .padding(.trailing, 20)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color.black.opacity(0.8))
-        .cornerRadius(16)
     }
     
     struct RepeatButton<Content: View>: View {
