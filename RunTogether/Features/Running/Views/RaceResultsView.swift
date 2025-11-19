@@ -94,6 +94,12 @@ struct RaceResultsView: View {
         .onDisappear {
             Task {
                 await resultsViewModel.stopRealtimeUpdates()
+                
+                // Clean up race state to allow joining new races
+                if let raceId = raceId {
+                    // Ensure we've left the race channel properly
+                    await appEnvironment.supabaseConnection.unsubscribeFromRaceBroadcasts()
+                }
             }
         }
     }

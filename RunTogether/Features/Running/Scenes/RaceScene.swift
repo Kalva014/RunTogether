@@ -25,9 +25,10 @@ class RaceScene: BaseRunningScene {
 
         // Add player
         let playerSpeed = isTreadmillMode ? currentPlayerSpeed : (locationManager?.currentSpeed ?? 0)
+        let playerDisplayDistance = finishTimes[-1] != nil ? raceDistance : playerDistance // Show full distance if finished
         currRunners.append(RunnerData(
             name: "You",
-            distance: playerDistance,
+            distance: playerDisplayDistance,
             pace: pace ?? "--:--",
             finishTime: finishTimes[-1],
             speed: playerSpeed
@@ -36,24 +37,31 @@ class RaceScene: BaseRunningScene {
         // Add AI opponents (for non-realtime mode)
         if !isRealtimeEnabled {
             for i in 0..<otherRunners.count {
+                let opponentDisplayDistance = finishTimes[i] != nil ? raceDistance : otherRunnersCurrentDistances[i] // Show full distance if finished
                 currRunners.append(RunnerData(
                     name: otherRunnersNames[i],
-                    distance: otherRunnersCurrentDistances[i],
+                    distance: opponentDisplayDistance,
                     pace: calculatePace(from: otherRunnersSpeeds[i], useMiles: useMiles),
                     finishTime: finishTimes[i],
                     speed: Double(otherRunnersSpeeds[i])
                 ))
             }
         } else {
-            // Add realtime opponents
-            for (userId, opponent) in realtimeOpponents where !opponent.isStale {
-                currRunners.append(RunnerData(
-                    name: opponent.username,
-                    distance: CGFloat(opponent.distance),
-                    pace: opponent.paceString(),
-                    finishTime: nil, // Realtime opponents don't have finish times tracked locally
-                    speed: opponent.speedMps
-                ))
+            // Add realtime opponents (include stale ones if they might have finished)
+            for (userId, opponent) in realtimeOpponents {
+                // Include all opponents, but mark stale ones with special handling
+                let isFinished = opponent.distance >= Double(raceDistance)
+                let shouldInclude = !opponent.isStale || isFinished
+                
+                if shouldInclude {
+                    currRunners.append(RunnerData(
+                        name: opponent.username,
+                        distance: CGFloat(opponent.distance),
+                        pace: opponent.paceString(),
+                        finishTime: isFinished ? 0 : nil, // Mark finished runners
+                        speed: opponent.speedMps
+                    ))
+                }
             }
         }
 

@@ -129,12 +129,18 @@ class RunningViewModel: ObservableObject {
                     ? paceComponents[0] + paceComponents[1] / 60
                     : 0.0
                 
-//                print("📤 Broadcasting update: distance=\(distance)m, pace=\(paceMinutes)min")
+                // Get current speed (important for treadmill mode)
+                let currentSpeed = self.isTreadmillMode ? 
+                    self.raceScene.currentPlayerSpeed : 
+                    (self.locationManager?.currentSpeed ?? 0.0)
+                
+//                print("📤 Broadcasting update: distance=\(distance)m, pace=\(paceMinutes)min, speed=\(currentSpeed)m/s")
                 
                 await appEnvironment.supabaseConnection.broadcastRaceUpdate(
                     raceId: raceId,
                     distance: distance,
-                    pace: paceMinutes
+                    pace: paceMinutes,
+                    speed: currentSpeed
                 )
             }
         }
@@ -249,5 +255,13 @@ class RunningViewModel: ObservableObject {
     
     var playerHeartbeat: Int {
         return self.heartRate // Return the latest heart rate from the published property
+    }
+    
+    var totalRaceTime: String {
+        guard let startTime = raceScene.startTime else { return "00:00" }
+        let elapsed = CACurrentMediaTime() - startTime
+        let minutes = Int(elapsed) / 60
+        let seconds = Int(elapsed) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
 }

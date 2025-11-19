@@ -389,13 +389,22 @@ class SupabaseConnection: ObservableObject {
                 .execute()
                 .value
             
-            // Try to join an existing race that isn’t full
+            // Try to join an existing race that isn't full and isn't too far progressed
             for race in races.shuffled() {
                 guard let raceId = race.id else { continue }
                 
+                // Check if race is still joinable (not too far progressed)
+                let raceAge = Date().timeIntervalSince(race.start_time)
+                let maxJoinableAge: TimeInterval = 300 // 5 minutes - adjust as needed
+                
+                if raceAge > maxJoinableAge {
+                    print("⚠️ Race \(raceId) is too far progressed (\(raceAge)s old), skipping")
+                    continue
+                }
+                
                 do {
                     let joinedId = try await joinRaceWithCap(raceId: raceId, maxParticipants: maxParticipants)
-                    print("✅ Joined race \(raceId) with distance \(distance)m")
+                    print("✅ Joined race \(raceId) with distance \(distance)m (age: \(raceAge)s)")
                     return joinedId
                 } catch {
                     print("⚠️ Could not join race \(raceId): \(error)")
@@ -503,7 +512,7 @@ class SupabaseConnection: ObservableObject {
     
     // MARK: - Race Updates
     /// Broadcasts a low-latency update to other participants.
-    func broadcastRaceUpdate(raceId: UUID, distance: Double, pace: Double) async {
+    func broadcastRaceUpdate(raceId: UUID, distance: Double, pace: Double, speed: Double) async {
        guard let userId = self.currentUserId else { return }
        
        do {
@@ -515,6 +524,7 @@ class SupabaseConnection: ObservableObject {
                 "user_id": .string(userId.uuidString),
                    "distance": .double(distance),
                    "pace": .double(pace),
+                   "speed": .double(speed),
                    "timestamp": .string(ISO8601DateFormatter().string(from: Date()))
                ]
            )
@@ -657,10 +667,11 @@ class SupabaseConnection: ObservableObject {
     
     func markParticipantDisconnected(raceId: UUID, userId: UUID) async throws {
         do {
+            // Use current timestamp for disconnected users (they "finished" when they left)
             let rowData: [String: AnyJSON] = [
-                "finish_time": "N/A", // THIS IS SUPPOSED TO BE A STRING BUT IT IS TRIPPING
-                "distance_covered": 0.0,
-                "average_pace": 0.0
+                "finish_time": AnyJSON.string(Date().ISO8601Format()),
+                "distance_covered": AnyJSON.double(0.0),
+                "average_pace": AnyJSON.double(0.0)
             ]
             
             _ = try await client
@@ -670,7 +681,7 @@ class SupabaseConnection: ObservableObject {
                 .eq("user_id", value: userId.uuidString)
                 .execute()
             
-            print("User \(userId) disconnected, marked as finished/N/A")
+            print("User \(userId) disconnected, marked as finished with timestamp")
             try await checkIfRaceFinished(raceId: raceId)
         }
         catch {

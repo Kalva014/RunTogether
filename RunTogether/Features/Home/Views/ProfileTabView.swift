@@ -140,7 +140,10 @@ struct ProfileTabView: View {
             }
         }
         .onAppear {
-            Task { await loadUserData() }
+            Task { 
+                await loadUserData()
+                await viewModel.loadStats(appEnvironment: appEnvironment)
+            }
             // Request permission on first appearance
             requestPhotoLibraryPermission()
         }
@@ -245,19 +248,28 @@ struct ProfileTabView: View {
     
     private var statsSection: some View {
         HStack(spacing: 20) {
-            statItem(value: "0", label: "Runs")
+            statItem(
+                value: viewModel.isLoadingStats ? "..." : "\(Int(viewModel.myStats?.total_races_completed ?? 0))", 
+                label: "Runs"
+            )
             
             Divider()
                 .background(Color.white.opacity(0.2))
                 .frame(height: 40)
             
-            statItem(value: "0 km", label: "Distance")
+            statItem(
+                value: viewModel.isLoadingStats ? "..." : String(format: "%.1f km", (viewModel.myStats?.total_distance_covered ?? 0) / 1000), 
+                label: "Distance"
+            )
             
             Divider()
                 .background(Color.white.opacity(0.2))
                 .frame(height: 40)
             
-            statItem(value: "--:--", label: "Avg Pace")
+            statItem(
+                value: viewModel.isLoadingStats ? "..." : "\(viewModel.myStats?.top_three_finishes ?? 0)", 
+                label: "Top 3"
+            )
         }
         .padding(.vertical, 20)
         .padding(.horizontal, 20)

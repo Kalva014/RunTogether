@@ -168,14 +168,22 @@ class RaceResultsViewModel: ObservableObject {
         // Sort: finished runners first (by time), then active runners (by distance)
         leaderboard = updatedLeaderboard.sorted {
             if let t1 = $0.finishTime, let t2 = $1.finishTime {
-                return t1 < t2
+                return t1 < t2  // Finished runners sorted by finish time (fastest first)
             } else if $0.finishTime != nil {
-                return true
+                return true     // Finished runners come before active runners
             } else if $1.finishTime != nil {
-                return false
+                return false    // Active runners come after finished runners
             } else {
-                return $0.distance > $1.distance
+                return $0.distance > $1.distance  // Active runners sorted by distance (furthest first)
             }
+        }
+        
+        print("📊 Realtime leaderboard updated with \(leaderboard.count) runners:")
+        for (index, runner) in leaderboard.enumerated() {
+            let status = runner.finishTime != nil ? "FINISHED" : "ACTIVE"
+            let timeOrDistance = runner.finishTime != nil ? 
+                "time: \(runner.finishTime!)" : "distance: \(runner.distance)m"
+            print("  \(index + 1). \(runner.name) (\(status)) - \(timeOrDistance)")
         }
     }
     
@@ -311,8 +319,20 @@ class RaceResultsViewModel: ObservableObject {
                 pace = initialRunner.pace
                 print("📊 \(username): Using initial leaderboard data - pace: \(pace)")
             } else if participant.finish_time != nil {
-                // Finished - use participant data
-                distance = CGFloat(participant.distance_covered)
+                // Finished - use full race distance (they completed the race)
+                // Get race distance from the race details
+                if let raceId = raceId {
+                    do {
+                        let race = try await appEnvironment.supabaseConnection.getRaceDetails(raceId: raceId)
+                        distance = CGFloat(race.distance) // Use full race distance for finished runners
+                    } catch {
+                        // Fallback to participant distance if race details unavailable
+                        distance = CGFloat(max(participant.distance_covered, 0))
+                    }
+                } else {
+                    distance = CGFloat(max(participant.distance_covered, 0))
+                }
+                
                 if let avgPace = participant.average_pace, avgPace > 0 {
                     pace = formatPace(paceMinutes: avgPace)
                     print("🏁 \(username): Finished - average_pace: \(avgPace), formatted: \(pace)")
@@ -350,14 +370,22 @@ class RaceResultsViewModel: ObservableObject {
         // Sort: finished runners first (by finish time), then active runners (by distance)
         leaderboard = completeLeaderboard.sorted {
             if let t1 = $0.finishTime, let t2 = $1.finishTime {
-                return t1 < t2
+                return t1 < t2  // Finished runners sorted by finish time (fastest first)
             } else if $0.finishTime != nil {
-                return true
+                return true     // Finished runners come before active runners
             } else if $1.finishTime != nil {
-                return false
+                return false    // Active runners come after finished runners
             } else {
-                return $0.distance > $1.distance
+                return $0.distance > $1.distance  // Active runners sorted by distance (furthest first)
             }
+        }
+        
+        print("📊 Updated leaderboard with \(leaderboard.count) runners:")
+        for (index, runner) in leaderboard.enumerated() {
+            let status = runner.finishTime != nil ? "FINISHED" : "ACTIVE"
+            let timeOrDistance = runner.finishTime != nil ? 
+                "time: \(runner.finishTime!)" : "distance: \(runner.distance)m"
+            print("  \(index + 1). \(runner.name) (\(status)) - \(timeOrDistance)")
         }
     }
     

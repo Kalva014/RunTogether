@@ -46,6 +46,8 @@ struct RunningView: View {
             // Game scene
             SpriteView(scene: viewModel.raceScene)
                 .ignoresSafeArea()
+                .allowsHitTesting(!viewModel.raceScene.isRaceOver) // Disable touch when race is over
+                .opacity(viewModel.raceScene.isRaceOver ? 0.8 : 1.0) // Dim scene when race is over
 
             // Overlay UI
             VStack {
@@ -72,7 +74,34 @@ struct RunningView: View {
 
             // Results button when race is over
             if viewModel.raceScene.isRaceOver {
-                resultsButton
+                VStack {
+                    Spacer()
+                    
+                    Button(action: { 
+                        print("🎯 Results button tapped - navigating to results")
+                        print("🎯 Current navigateToResults value: \(navigateToResults)")
+                        print("🎯 Race over status: \(viewModel.raceScene.isRaceOver)")
+                        navigateToResults = true 
+                        print("🎯 Set navigateToResults to: \(navigateToResults)")
+                    }) {
+                        HStack {
+                            Image(systemName: "flag.checkered")
+                            Text("View Results")
+                                .fontWeight(.bold)
+                        }
+                        .font(.headline)
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Color.orange)
+                        .cornerRadius(16)
+                        .shadow(color: Color.orange.opacity(0.5), radius: 10)
+                    }
+                    .padding(.horizontal, 40)
+                    .padding(.bottom, 40)
+                }
+                .zIndex(1000) // Ensure button is on top
+                .allowsHitTesting(true) // Explicitly allow hit testing
             }
             
             // Menu overlay
@@ -109,10 +138,20 @@ struct RunningView: View {
             Task {
                 await viewModel.stopRealtime(appEnvironment: appEnvironment)
                 await chatViewModel.stopChat()
+                
+                // Only clean up if we're not navigating to results
+                if !navigateToResults {
+                    if let raceId = raceId {
+                        // Only leave race if we haven't finished (to preserve results)
+                        if !viewModel.raceScene.isRaceOver {
+                            try? await appEnvironment.supabaseConnection.leaveRace(raceId: raceId)
+                        }
+                    }
+                }
             }
         }
-        .background(
-            NavigationLink(isActive: $navigateToResults) {
+        .fullScreenCover(isPresented: $navigateToResults) {
+            NavigationStack {
                 RaceResultsView(
                     leaderboard: viewModel.leaderboard,
                     playerTime: viewModel.raceScene.finishTimes[-1],
@@ -127,18 +166,42 @@ struct RunningView: View {
                     ),
                     raceId: raceId
                 )
-            } label: { EmptyView() }
-                .hidden()
-        )
+            }
+        }
         .alert("Leave Race?", isPresented: $showLeaveConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Leave", role: .destructive) {
                 Task {
+                    print("🚪 User initiated race leave")
                     if let raceId = raceId {
+                        // Stop realtime first
                         await viewModel.stopRealtime(appEnvironment: appEnvironment)
                         await chatViewModel.stopChat()
-                        try await appEnvironment.supabaseConnection.leaveRace(raceId: raceId)
+                        
+                        // Mark as disconnected if race is still active
+                        if !viewModel.raceScene.isRaceOver {
+                            do {
+                                try await appEnvironment.supabaseConnection.markParticipantDisconnected(
+                                    raceId: raceId, 
+                                    userId: appEnvironment.supabaseConnection.currentUserId ?? UUID()
+                                )
+                                print("✅ Marked as disconnected")
+                            } catch {
+                                print("❌ Error marking as disconnected: \(error)")
+                            }
+                        }
+                        
+                        // Leave the race
+                        do {
+                            try await appEnvironment.supabaseConnection.leaveRace(raceId: raceId)
+                            print("✅ Successfully left race")
+                        } catch {
+                            print("❌ Error leaving race: \(error)")
+                        }
                     }
+                    
+                    // Dismiss the view
+                    print("🔄 Attempting to dismiss RunningView")
                     dismiss()
                 }
             }
@@ -164,6 +227,20 @@ struct RunningView: View {
             
             // Stats
             VStack(alignment: .trailing, spacing: 8) {
+                // Total Race Time
+                HStack(spacing: 6) {
+                    Image(systemName: "stopwatch")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                    Text(viewModel.totalRaceTime)
+                        .font(.system(size: 18, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Color.black.opacity(0.6))
+                .cornerRadius(10)
+                
                 // Pace
                 HStack(spacing: 6) {
                     Text(viewModel.playerPace)
@@ -390,16 +467,24 @@ struct RunningView: View {
             
             Spacer()
             
-            // Distance or time
-            if let time = runner.finishTime {
-                Text(viewModel.raceScene.formatTime(time))
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundColor(.green)
-            } else {
-                Text(viewModel.formattedDistance(runner.distance))
-                    .font(.caption)
-                    .foregroundColor(.gray)
+            // Pace and Distance/Time
+            VStack(alignment: .trailing, spacing: 2) {
+                // Pace
+                Text(runner.pace)
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+                
+                // Distance or time
+                if let time = runner.finishTime {
+                    Text(viewModel.raceScene.formatTime(time))
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.green)
+                } else {
+                    Text(viewModel.formattedDistance(runner.distance))
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -419,7 +504,10 @@ struct RunningView: View {
         VStack {
             Spacer()
             
-            Button(action: { navigateToResults = true }) {
+            Button(action: { 
+                print("🎯 Results button tapped - navigating to results")
+                navigateToResults = true 
+            }) {
                 HStack {
                     Image(systemName: "flag.checkered")
                     Text("View Results")
