@@ -3,9 +3,6 @@
 //  RunTogether
 //
 
-// ==========================================
-// MARK: - RunTabView.swift
-// ==========================================
 import SwiftUI
 
 struct RunTabView: View {
@@ -23,6 +20,10 @@ struct RunTabView: View {
     @State private var activeMode: String = "Race"
     @State private var showStartOptions = false
     
+    // Tooltip state
+    @State private var showTooltip = false
+    @State private var tooltipText = ""
+
     var distanceOptions: [String] {
         useMiles
         ? ["1 Mile", "3.1 Miles", "6.2 Miles", "13.1 Miles", "26.2 Miles"]
@@ -67,6 +68,10 @@ struct RunTabView: View {
                 if showStartOptions {
                     startOptionsSheet
                 }
+                
+                if showTooltip {
+                    tooltipOverlay
+                }
             }
             .navigationBarHidden(true)
             .fullScreenCover(isPresented: $navigateToRunning) {
@@ -88,13 +93,12 @@ struct RunTabView: View {
         HStack {
             Image(systemName: "figure.run")
                 .font(.system(size: 28, weight: .bold))
-                .foregroundColor(.white)            
+                .foregroundColor(.white)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 16)
     }
 
-    
     private var heroSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Run")
@@ -148,8 +152,7 @@ struct RunTabView: View {
                         .tint(.orange)
                 }
                 
-                Divider()
-                    .background(Color.white.opacity(0.2))
+                Divider().background(Color.white.opacity(0.2))
                 
                 HStack {
                     Text("Use Miles")
@@ -204,7 +207,9 @@ struct RunTabView: View {
                 title: "Race Mode",
                 subtitle: "Compete with others",
                 icon: "flag.checkered.2.crossed",
-                color: .orange
+                color: .orange,
+                disabled: isTreadmillMode,
+                tooltip: "Race Mode is disabled while Treadmill Mode is ON."
             ) {
                 activeMode = "Race"
                 showStartOptions = true
@@ -240,8 +245,8 @@ struct RunTabView: View {
                             .font(.system(size: 40))
                             .foregroundColor(.orange)
                     }
-                    .disabled(raceIdInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    .opacity(raceIdInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.5 : 1.0)
+                    .disabled(raceIdInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .opacity(raceIdInput.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1.0)
                 }
             }
             .padding(20)
@@ -250,18 +255,40 @@ struct RunTabView: View {
         }
     }
     
-    private func guidedRunCard(title: String, subtitle: String, icon: String, color: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+    // MARK: - Updated guidedRunCard with disabled + tooltip
+    private func guidedRunCard(
+        title: String,
+        subtitle: String,
+        icon: String,
+        color: Color,
+        disabled: Bool = false,
+        tooltip: String? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
+        
+        Button(action: {
+            if disabled {
+                if let tooltip = tooltip {
+                    tooltipText = tooltip
+                    withAnimation { showTooltip = true }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation { showTooltip = false }
+                    }
+                }
+            } else {
+                action()
+            }
+        }) {
             HStack {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Image(systemName: icon)
                             .font(.title2)
-                            .foregroundColor(color)
-                        
+                            .foregroundColor(color.opacity(disabled ? 0.3 : 1))
+
                         Text(title)
                             .font(.headline)
-                            .foregroundColor(.white)
+                            .foregroundColor(disabled ? .gray : .white)
                     }
                     
                     Text(subtitle)
@@ -272,21 +299,36 @@ struct RunTabView: View {
                 Spacer()
                 
                 Image(systemName: "chevron.right")
-                    .foregroundColor(.gray)
+                    .foregroundColor(.gray.opacity(disabled ? 0.3 : 1))
             }
             .padding(20)
             .background(Color.white.opacity(0.1))
             .cornerRadius(16)
         }
+        .disabled(false) // keep button tappable to show tooltip
     }
+
+    // Tooltip Overlay
+    private var tooltipOverlay: some View {
+        VStack {
+            Spacer()
+            Text(tooltipText)
+                .padding()
+                .background(Color.black.opacity(0.8))
+                .foregroundColor(.white)
+                .cornerRadius(10)
+                .padding(.bottom, 50)
+        }
+        .transition(.opacity)
+    }
+
     
+    // MARK: - Start sheet & other functions unchanged
     private var startOptionsSheet: some View {
         ZStack {
             Color.black.opacity(0.8)
                 .ignoresSafeArea()
-                .onTapGesture {
-                    showStartOptions = false
-                }
+                .onTapGesture { showStartOptions = false }
             
             VStack(spacing: 0) {
                 Spacer()
@@ -354,9 +396,7 @@ struct RunTabView: View {
                             }
                         }
                         
-                        Button(action: {
-                            showStartOptions = false
-                        }) {
+                        Button(action: { showStartOptions = false }) {
                             Text("Cancel")
                                 .font(.headline)
                                 .foregroundColor(.gray)
@@ -374,7 +414,8 @@ struct RunTabView: View {
         .transition(.move(edge: .bottom))
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: showStartOptions)
     }
-    
+
+
     private var waitingOverlay: some View {
         ZStack {
             Color.black.opacity(0.95)
@@ -438,8 +479,18 @@ struct RunTabView: View {
         }
     }
     
+    // MARK: - Race Logic
     @MainActor
     private func handleCreateRace() async {
+        if isTreadmillMode {
+            tooltipText = "Race Mode is unavailable in Treadmill Mode."
+            withAnimation { showTooltip = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                withAnimation { showTooltip = false }
+            }
+            return
+        }
+
         showStartOptions = false
         activeMode = "Race"
         guard let id = await viewModel.createRace(
@@ -470,6 +521,15 @@ struct RunTabView: View {
     
     @MainActor
     private func handleJoinRandom() async {
+        if isTreadmillMode {
+            tooltipText = "Race Mode is unavailable in Treadmill Mode."
+            withAnimation { showTooltip = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                withAnimation { showTooltip = false }
+            }
+            return
+        }
+
         showStartOptions = false
         activeMode = "Race"
         guard let id = await viewModel.joinRandomRace(
@@ -517,6 +577,8 @@ struct RunTabView: View {
     }
 }
 
+
+// MARK: - Corner Radius Extension
 extension View {
     func cornerRadius(_ radius: CGFloat, corners: UIRectCorner) -> some View {
         clipShape(RoundedCorner(radius: radius, corners: corners))
@@ -536,15 +598,6 @@ struct RoundedCorner: Shape {
         return Path(path.cgPath)
     }
 }
-
-#Preview {
-    RunTabView()
-        .environmentObject(AppEnvironment(
-            appUser: AppUser(id: UUID().uuidString, email: "test@example.com", username: "testuser"),
-            supabaseConnection: SupabaseConnection()
-        ))
-}
-
 
 #Preview {
     RunTabView()
