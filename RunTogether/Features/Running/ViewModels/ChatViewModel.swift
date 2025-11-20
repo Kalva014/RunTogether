@@ -35,35 +35,33 @@ class ChatViewModel: ObservableObject {
     
     /// Start listening to chat messages
     func startChat(appEnvironment: AppEnvironment) async {
+        // Only stop chat if changing raceId (prevents double-unsubscribe race bugs)
+        if self.appEnvironment != nil && self.raceId != appEnvironment.supabaseConnection.currentChatRaceId {
+            print("[ChatViewModel] Switching chats from raceId: \(self.raceId?.uuidString ?? "nil") to \(appEnvironment.supabaseConnection.currentChatRaceId?.uuidString ?? "nil") (will clear state)")
+            await stopChat()
+            self.messages.removeAll()
+        }
         guard let raceId = raceId else {
             print("❌ No raceId provided for chat")
             return
         }
-        
         self.appEnvironment = appEnvironment
-        
-        print("💬 Starting chat for race: \(raceId)")
-        
-        // Subscribe to chat broadcasts
+        print("💬 [ChatViewModel] Starting chat for race: \(raceId)")
         await appEnvironment.supabaseConnection.subscribeToChatBroadcasts(raceId: raceId)
-        
-        // Start processing incoming messages
         Task { @MainActor in
             await processChatMessages(appEnvironment: appEnvironment)
         }
-        
         isSubscribed = true
-        print("✅ Chat initialized")
+        print("✅ [ChatViewModel] Chat initialized for raceId=\(raceId.uuidString)")
     }
     
     /// Stop listening to chat messages
     func stopChat() async {
         guard let appEnvironment = appEnvironment else { return }
-        
         await appEnvironment.supabaseConnection.unsubscribeFromChatBroadcasts()
         isSubscribed = false
-        messages.removeAll() // Fully clear chat state when stopping
-        print("🛑 Chat stopped")
+        print("🛑 [ChatViewModel] Chat stopped for raceId=\(raceId?.uuidString ?? "nil")")
+        self.messages.removeAll()
     }
     
     /// Send a chat message

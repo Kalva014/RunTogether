@@ -1120,6 +1120,8 @@ class SupabaseConnection: ObservableObject {
 
     // MARK: - Live Post Race Chat
     var chatChannel: RealtimeChannelV2?
+    // Track which raceId the chatChannel is for
+    internal(set) var currentChatRaceId: UUID?
 
     /// Broadcasts a chat message to all participants (low-latency)
     func broadcastChatMessage(raceId: UUID, message: String, username: String) async {
@@ -1145,13 +1147,18 @@ class SupabaseConnection: ObservableObject {
     /// Subscribes to chat broadcasts for a race
     func subscribeToChatBroadcasts(raceId: UUID) async {
         do {
+            if let currentId = currentChatRaceId, currentId != raceId {
+                if let channel = chatChannel {
+                    print("🛑 Unsubscribing old chat channel for raceId: \(currentId)")
+                    try? await channel.unsubscribe()
+                }
+                chatChannel = nil
+            }
             let channel = try await getChatChannel(raceId: raceId)
+            currentChatRaceId = raceId
             self.chatChannel = channel
-            
-            // Subscribe to the channel
             try await channel.subscribeWithError()
-            print("✅ Subscribed to chat broadcasts for \(raceId)")
-            
+            print("✅ Subscribed to chat broadcasts for raceId: \(raceId)")
         } catch {
             print("Error subscribing to chat broadcasts: \(error)")
         }
@@ -1159,27 +1166,32 @@ class SupabaseConnection: ObservableObject {
     
     /// Unsubscribe from chat broadcasts
     func unsubscribeFromChatBroadcasts() async {
-        guard let channel = chatChannel else { return }
-        do {
-            try await channel.unsubscribe()
-            self.chatChannel = nil
-            print("🛑 Unsubscribed from chat broadcasts")
-        } catch {
-            print("Error unsubscribing from chat: \(error)")
+        if let channel = chatChannel {
+            print("🛑 Unsubscribing chatChannel for raceId: \(currentChatRaceId?.uuidString ?? "nil")")
+            try? await channel.unsubscribe()
         }
+        chatChannel = nil
+        currentChatRaceId = nil
     }
     
     /// Reuses or creates a broadcast channel for chat
     private func getChatChannel(raceId: UUID) async throws -> RealtimeChannelV2 {
-        if let channel = chatChannel {
+        if let channel = chatChannel, currentChatRaceId == raceId {
+            print("♻️ Re-using chatChannel for raceId: \(raceId)")
             return channel
         }
-        
+        if let channel = chatChannel, currentChatRaceId != raceId {
+            print("🛑 Closing previous chatChannel for raceId: \(currentChatRaceId?.uuidString ?? "nil")")
+            try? await channel.unsubscribe()
+            chatChannel = nil
+            currentChatRaceId = nil
+        }
+        print("🔄 Creating new chatChannel for raceId: \(raceId)")
         let channel = client.channel("race_chat:\(raceId)") {
             $0.broadcast.acknowledgeBroadcasts = true
         }
-        
-        self.chatChannel = channel
+        chatChannel = channel
+        currentChatRaceId = raceId
         return channel
     }
     

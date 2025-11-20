@@ -429,6 +429,11 @@ class RaceResultsViewModel: ObservableObject {
                 return $0.distance > $1.distance  // Active runners sorted by distance (furthest first)
             }
         }
+        print("[RaceResultsViewModel] Final leaderboard for raceId=\(raceId?.uuidString ?? "nil"): \(leaderboard.map { "\($0.name)-\($0.finishTime != nil ? "FINISHED" : "ACTIVE")"})")
+        if leaderboard.isEmpty && !participants.isEmpty {
+            print("⚠️ Leaderboard was empty but there are participants! Adding all participants.")
+            leaderboard = completeLeaderboard // fallback: publish everyone if sort failed somehow
+        }
         
         print("📊 Updated leaderboard with \(leaderboard.count) runners:")
         for (index, runner) in leaderboard.enumerated() {
