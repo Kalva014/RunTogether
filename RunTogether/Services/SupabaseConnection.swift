@@ -315,6 +315,8 @@ class SupabaseConnection: ObservableObject {
             await currentChannel.unsubscribe()
             self.currentChannel = nil
         }
+        // Add additional cleanup for chat/messaging as well:
+        await unsubscribeFromChatBroadcasts()
     }
     
     func joinRaceWithCap(raceId: UUID, maxParticipants: Int) async throws -> UUID? {
@@ -609,6 +611,7 @@ class SupabaseConnection: ObservableObject {
        guard let channel = currentChannel else { return }
        do {
            try await channel.unsubscribe()
+           currentChannel = nil // Clear the channel reference
            print("🛑 Unsubscribed from race broadcasts")
        } catch {
            print("Error unsubscribing: \(error)")
@@ -643,6 +646,7 @@ class SupabaseConnection: ObservableObject {
             let allFinished = participants.allSatisfy { $0.finish_time != nil }
             
             if allFinished {
+                // First, update the race end time
                 try await self.client
                     .from("Races")
                     .update(["end_time": ISO8601DateFormatter().string(from: Date())])
@@ -656,8 +660,25 @@ class SupabaseConnection: ObservableObject {
                     .eq("race_id", value: raceId.uuidString)
                     .execute()
                 
+                // Wait a moment for any final database operations to complete
+                try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+                
+                // Delete the race participants (this should cascade delete the race if properly configured)
+                try await self.client
+                    .from("Race_Participants")
+                    .delete()
+                    .eq("race_id", value: raceId.uuidString)
+                    .execute()
+                
+                // Finally, delete the race itself
+                try await self.client
+                    .from("Races")
+                    .delete()
+                    .eq("id", value: raceId.uuidString)
+                    .execute()
+                
                 await leaveRace()
-                print("Race \(raceId) finished & cleaned up.")
+                print("Race \(raceId) finished & completely deleted from database.")
             }
         }
         catch {

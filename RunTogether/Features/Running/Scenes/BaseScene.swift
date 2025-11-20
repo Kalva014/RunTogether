@@ -594,7 +594,7 @@ class BaseRunningScene: SKScene, ObservableObject {
             // Add realtime opponents (include stale ones if they might have finished)
             for (userId, opponent) in realtimeOpponents {
                 // Include all opponents, but mark stale ones with special handling
-                let isFinished = opponent.distance >= Double(raceDistance)
+                let isFinished = opponent.distance >= Double(raceDistance) * 0.95 // Allow for small distance variations
                 let shouldInclude = !opponent.isStale || isFinished
                 
                 if shouldInclude {
@@ -602,9 +602,12 @@ class BaseRunningScene: SKScene, ObservableObject {
                         name: opponent.username,
                         distance: CGFloat(opponent.distance),
                         pace: opponent.paceString(),
-                        finishTime: isFinished ? 0 : nil, // Mark finished runners
+                        finishTime: nil, // Don't set fake finish times - let RaceResultsViewModel handle this from database
                         speed: opponent.speedMps
                     ))
+                    print("📊 Including opponent \(opponent.username): distance=\(opponent.distance), isFinished=\(isFinished), isStale=\(opponent.isStale)")
+                } else {
+                    print("📊 Excluding opponent \(opponent.username): distance=\(opponent.distance), isFinished=\(isFinished), isStale=\(opponent.isStale)")
                 }
             }
         }
@@ -777,6 +780,18 @@ class BaseRunningScene: SKScene, ObservableObject {
         isRealtimeEnabled = false
         currentRaceId = nil
         realtimeOpponents.removeAll()
+        
+        // Clear visual runners
+        for runnerNode in otherRunners {
+            runnerNode.removeFromParent()
+        }
+        otherRunners.removeAll()
+        otherRunnersNames.removeAll()
+        otherRunnersCurrentDistances.removeAll()
+        otherRunnersSpeeds.removeAll()
+        previousOpponentSpeeds.removeAll()
+        
+        print("🧹 Cleared all visual runners and realtime state")
     }
 
     // MARK: - Update existing update() method

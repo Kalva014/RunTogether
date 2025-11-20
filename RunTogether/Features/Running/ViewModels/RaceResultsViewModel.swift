@@ -19,6 +19,7 @@ class RaceResultsViewModel: ObservableObject {
     private var raceId: UUID?
     private var appEnvironment: AppEnvironment?
     private var useMiles: Bool
+    private var cachedRaceStartTime: Date? // Cache race start time to avoid repeated fetches
     
     init(initialLeaderboard: [RunnerData], raceId: UUID?, useMiles: Bool) {
         self.initialLeaderboard = initialLeaderboard
@@ -56,7 +57,8 @@ class RaceResultsViewModel: ObservableObject {
         guard let appEnvironment = appEnvironment else { return }
         
         await appEnvironment.supabaseConnection.unsubscribeFromRaceBroadcasts()
-        realtimeOpponents.removeAll()
+        realtimeOpponents.removeAll() // Only clear in-memory real-time cache
+        // Do NOT clear the leaderboard array here, as the completed runners leaderboard must persist for results view
         print("🛑 Stopped realtime leaderboard updates")
     }
     
@@ -95,6 +97,7 @@ class RaceResultsViewModel: ObservableObject {
                 realtimeOpponents[userId]?.paceMinutes = pace
                 realtimeOpponents[userId]?.speedMps = speedMps
                 realtimeOpponents[userId]?.lastUpdateTime = Date()
+                print("📊 RaceResults: Updated opponent \(userId) - distance: \(distance)m")
                 await updateLeaderboard()
             } else {
                 // Fetch profile for new opponent
@@ -119,6 +122,8 @@ class RaceResultsViewModel: ObservableObject {
     private func updateLeaderboard() async {
         isUpdating = true
         defer { isUpdating = false }
+        
+        print("📊 RaceResults: Updating leaderboard with \(realtimeOpponents.count) realtime opponents")
         
         // Use current leaderboard state (which includes finished runners from database)
         let currentFinishedRunners = leaderboard.filter { $0.finishTime != nil }
@@ -239,16 +244,25 @@ class RaceResultsViewModel: ObservableObject {
     private func buildCompleteLeaderboard(participants: [RaceParticipants], appEnvironment: AppEnvironment) async {
         var completeLeaderboard: [RunnerData] = []
         
-        // Get race start time
+        // Get race start time (only fetch once)
         var raceStartTime: Date?
-        if let raceId = raceId {
-            do {
-                let race = try await appEnvironment.supabaseConnection.getRaceDetails(raceId: raceId)
-                raceStartTime = race.start_time
-                print("📅 Race start time: \(race.start_time)")
-            } catch {
-                print("❌ Error fetching race start time: \(error)")
+        if cachedRaceStartTime == nil {
+            if let raceId = raceId {
+                do {
+                    let race = try await appEnvironment.supabaseConnection.getRaceDetails(raceId: raceId)
+                    cachedRaceStartTime = race.start_time
+                    raceStartTime = race.start_time
+                    print("📅 Race start time: \(race.start_time)")
+                } catch {
+                    print("❌ Error fetching race start time: \(error)")
+                    // Fallback: use a reasonable start time (current time minus 10 minutes)
+                    cachedRaceStartTime = Date().addingTimeInterval(-600)
+                    raceStartTime = cachedRaceStartTime
+                    print("📅 Using fallback race start time: \(raceStartTime!)")
+                }
             }
+        } else {
+            raceStartTime = cachedRaceStartTime
         }
         
         // Create a map of initial leaderboard data (by name) to preserve finish times and paces
@@ -275,32 +289,68 @@ class RaceResultsViewModel: ObservableObject {
         for participant in participants {
             let username = profiles[participant.user_id]?.username ?? "Unknown"
             
-            // First, try to get finish time from initial leaderboard (might be more accurate)
+            // Calculate finish time from database first (more reliable than initial leaderboard)
             var finishTime: TimeInterval? = nil
-            if let initialRunner = initialDataMap[username] {
-                finishTime = initialRunner.finishTime
+            if let finishTimeString = participant.finish_time,
+               let startTime = raceStartTime {
+                
+                // Try multiple date formats
+                let formatters = [
+                    // ISO8601 with fractional seconds
+                    {
+                        let formatter = ISO8601DateFormatter()
+                        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                        return formatter
+                    }(),
+                    // ISO8601 without fractional seconds
+                    {
+                        let formatter = ISO8601DateFormatter()
+                        formatter.formatOptions = [.withInternetDateTime]
+                        return formatter
+                    }(),
+                    // Standard ISO8601
+                    ISO8601DateFormatter(),
+                    // Custom format for incomplete dates
+                    {
+                        let formatter = DateFormatter()
+                        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+                        return formatter
+                    }(),
+                    {
+                        let formatter = DateFormatter()
+                        formatter.dateFormat = "yyyy-MM-dd"
+                        return formatter
+                    }()
+                ]
+                
+                for formatter in formatters {
+                    if let dateFormatter = formatter as? DateFormatter {
+                        if let finishTimeDate = dateFormatter.date(from: finishTimeString) {
+                            finishTime = finishTimeDate.timeIntervalSince(startTime)
+                            print("✅ Calculated finish time for \(username): \(finishTime ?? 0) seconds using DateFormatter")
+                            print("   📅 Start: \(startTime), Finish: \(finishTimeDate)")
+                            break
+                        }
+                    } else if let iso8601Formatter = formatter as? ISO8601DateFormatter {
+                        if let finishTimeDate = iso8601Formatter.date(from: finishTimeString) {
+                            finishTime = finishTimeDate.timeIntervalSince(startTime)
+                            print("✅ Calculated finish time for \(username): \(finishTime ?? 0) seconds using ISO8601DateFormatter")
+                            print("   📅 Start: \(startTime), Finish: \(finishTimeDate)")
+                            break
+                        }
+                    }
+                }
+                
+                if finishTime == nil {
+                    print("⚠️ Could not parse finish_time '\(finishTimeString)' for \(username) with any formatter")
+                }
             }
             
-            // If not in initial leaderboard, calculate from database
-            if finishTime == nil, let finishTimeString = participant.finish_time,
-               let startTime = raceStartTime {
-                // Try parsing with ISO8601DateFormatter
-                let formatter = ISO8601DateFormatter()
-                formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                
-                if let finishTimeDate = formatter.date(from: finishTimeString) {
-                    // Calculate elapsed time in seconds
-                    finishTime = finishTimeDate.timeIntervalSince(startTime)
-                    print("✅ Calculated finish time for \(username): \(finishTime ?? 0) seconds")
-                } else {
-                    // Try without fractional seconds
-                    let simpleFormatter = ISO8601DateFormatter()
-                    if let finishTimeDate = simpleFormatter.date(from: finishTimeString) {
-                        finishTime = finishTimeDate.timeIntervalSince(startTime)
-                        print("✅ Calculated finish time (simple) for \(username): \(finishTime ?? 0) seconds")
-                    } else {
-                        print("⚠️ Could not parse finish_time '\(finishTimeString)' for \(username)")
-                    }
+            // If database doesn't have finish time, try initial leaderboard as fallback
+            if finishTime == nil, let initialRunner = initialDataMap[username] {
+                finishTime = initialRunner.finishTime
+                if finishTime != nil {
+                    print("📊 \(username): Using initial leaderboard finish time: \(finishTime!)")
                 }
             }
             
@@ -387,6 +437,17 @@ class RaceResultsViewModel: ObservableObject {
                 "time: \(runner.finishTime!)" : "distance: \(runner.distance)m"
             print("  \(index + 1). \(runner.name) (\(status)) - \(timeOrDistance)")
         }
+        
+        // Debug: Check if sorting is working correctly
+        let finishedRunners = leaderboard.filter { $0.finishTime != nil }
+        let activeRunners = leaderboard.filter { $0.finishTime == nil }
+        print("📊 Breakdown: \(finishedRunners.count) finished, \(activeRunners.count) active")
+    }
+    
+    // Add a public method to refresh the leaderboard, so it can be called by the view after race finishes
+    func refreshLeaderboard() async {
+        await checkFinishTimes()
+        await updateLeaderboard()
     }
     
     deinit {

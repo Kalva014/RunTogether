@@ -62,6 +62,7 @@ class ChatViewModel: ObservableObject {
         
         await appEnvironment.supabaseConnection.unsubscribeFromChatBroadcasts()
         isSubscribed = false
+        messages.removeAll() // Fully clear chat state when stopping
         print("🛑 Chat stopped")
     }
     

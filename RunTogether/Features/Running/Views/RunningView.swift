@@ -159,13 +159,21 @@ struct RunningView: View {
                     stats: RaceStats(
                         playerName: "You",
                         playerTime: viewModel.raceScene.finishTimes[-1],
-                        playerPlace: (viewModel.leaderboard.firstIndex(where: { $0.name == "You" }) ?? 0) + 1,
+                        playerPlace: 1, // Will be recalculated in RaceResultsView based on final leaderboard
                         totalRunners: viewModel.leaderboard.count,
                         raceDistanceMeters: Double(viewModel.raceScene.raceDistance),
                         useMiles: useMiles
                     ),
                     raceId: raceId
                 )
+                .onAppear {
+                    print("🏁 Navigating to results with player finish time: \(viewModel.raceScene.finishTimes[-1] ?? -1)")
+                    print("🏁 Current leaderboard:")
+                    for (index, runner) in viewModel.leaderboard.enumerated() {
+                        let status = runner.finishTime != nil ? "FINISHED(\(runner.finishTime!))" : "ACTIVE"
+                        print("  \(index + 1). \(runner.name) - \(status) - distance: \(runner.distance)")
+                    }
+                }
             }
         }
         .alert("Leave Race?", isPresented: $showLeaveConfirmation) {
@@ -173,36 +181,41 @@ struct RunningView: View {
             Button("Leave", role: .destructive) {
                 Task {
                     print("🚪 User initiated race leave")
-                    if let raceId = raceId {
-                        // Stop realtime first
-                        await viewModel.stopRealtime(appEnvironment: appEnvironment)
-                        await chatViewModel.stopChat()
-                        
-                        // Mark as disconnected if race is still active
-                        if !viewModel.raceScene.isRaceOver {
-                            do {
+                    
+                    do {
+                        if let raceId = raceId {
+                            // Stop realtime first
+                            await viewModel.stopRealtime(appEnvironment: appEnvironment)
+                            await chatViewModel.stopChat()
+                            
+                            // Mark as disconnected if race is still active
+                            if !viewModel.raceScene.isRaceOver {
                                 try await appEnvironment.supabaseConnection.markParticipantDisconnected(
                                     raceId: raceId, 
                                     userId: appEnvironment.supabaseConnection.currentUserId ?? UUID()
                                 )
                                 print("✅ Marked as disconnected")
-                            } catch {
-                                print("❌ Error marking as disconnected: \(error)")
                             }
-                        }
-                        
-                        // Leave the race
-                        do {
+                            
+                            // Leave the race
                             try await appEnvironment.supabaseConnection.leaveRace(raceId: raceId)
                             print("✅ Successfully left race")
-                        } catch {
-                            print("❌ Error leaving race: \(error)")
+                        }
+                        
+                        // Always dismiss the view, even if there were errors
+                        print("🔄 Attempting to dismiss RunningView")
+                        await MainActor.run {
+                            dismiss()
+                        }
+                        
+                    } catch {
+                        print("❌ Error during race leave: \(error)")
+                        // Still dismiss even if there was an error
+                        print("🔄 Dismissing despite error")
+                        await MainActor.run {
+                            dismiss()
                         }
                     }
-                    
-                    // Dismiss the view
-                    print("🔄 Attempting to dismiss RunningView")
-                    dismiss()
                 }
             }
         } message: {

@@ -85,15 +85,25 @@ struct RaceResultsView: View {
                 .hidden()
         )
         .onAppear {
+            print("🏁 RaceResultsView appeared with initial leaderboard:")
+            for (index, runner) in initialLeaderboard.enumerated() {
+                let status = runner.finishTime != nil ? "FINISHED(\(runner.finishTime!))" : "ACTIVE"
+                print("  \(index + 1). \(runner.name) - \(status) - distance: \(runner.distance)")
+            }
+            
             if raceId != nil {
                 Task {
                     await resultsViewModel.startRealtimeUpdates(appEnvironment: appEnvironment)
+                    await resultsViewModel.refreshLeaderboard()
+                    await chatViewModel.startChat(appEnvironment: appEnvironment)
                 }
             }
         }
         .onDisappear {
             Task {
                 await resultsViewModel.stopRealtimeUpdates()
+                await chatViewModel.stopChat()
+                chatViewModel.messages.removeAll() // Clean up chat messages so next race starts fresh
                 
                 // Clean up race state to allow joining new races
                 if let raceId = raceId {
@@ -170,10 +180,14 @@ struct RaceResultsView: View {
     
     // MARK: - Player Stats Card
     private func playerStatsCard(stats: RaceStats) -> some View {
-        VStack(spacing: 16) {
+        // Use their actual username for lookup rather than relying on the 'You' label
+        let playerName = appEnvironment.appUser?.username ?? "You"
+        let actualPlayerPlace = (resultsViewModel.leaderboard.firstIndex(where: { $0.name == playerName }) ?? 0) + 1
+        
+        return VStack(spacing: 16) {
             HStack(spacing: 40) {
                 VStack(spacing: 4) {
-                    Text("\(stats.playerPlace)")
+                    Text("\(actualPlayerPlace)")
                         .font(.system(size: 36, weight: .bold))
                         .foregroundColor(.white)
                     Text("Place")
@@ -195,7 +209,7 @@ struct RaceResultsView: View {
                 }
             }
             
-            if stats.playerPlace <= 3 {
+            if actualPlayerPlace <= 3 {
                 HStack(spacing: 8) {
                     Image(systemName: "star.fill")
                         .foregroundColor(.orange)
@@ -280,8 +294,11 @@ struct RaceResultsView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "clock.fill")
                                 .font(.caption)
-                            Text(formatTime(finishTime))
+                            Text("\(formatTime(finishTime))")
                                 .font(.caption)
+                            Text("time")
+                                .font(.caption2)
+                                .foregroundColor(.green.opacity(0.7))
                         }
                         .foregroundColor(.green)
                     }
@@ -292,6 +309,9 @@ struct RaceResultsView: View {
                             .font(.caption)
                         Text(runner.pace)
                             .font(.caption)
+                        Text("pace")
+                            .font(.caption2)
+                            .foregroundColor(.gray.opacity(0.7))
                     }
                     .foregroundColor(.gray)
                 }
