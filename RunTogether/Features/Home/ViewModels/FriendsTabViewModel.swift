@@ -27,21 +27,18 @@ class FriendsTabViewModel: ObservableObject {
         errorMessage = nil
         
         do {
-            let friendIds = try await appEnvironment.supabaseConnection.listFriends()
-            var loadedFriends: [FriendDisplay] = []
+            let profiles = try await appEnvironment.supabaseConnection.fetchFriendProfiles()
+            let userIds = profiles.map { $0.id }
+            let activeRaceMap = try await appEnvironment.supabaseConnection.fetchActiveRaces(for: userIds)
             
-            for friendId in friendIds {
-                // Get the profile info
-                guard let profile = try? await appEnvironment.supabaseConnection.getProfileByUsername(username: friendId) else { continue }
-                
-                // Get active race if any
-                let raceId = try? await appEnvironment.supabaseConnection.getActiveRaceForUser(userId: profile.id)
-                
-                let display = FriendDisplay(id: profile.id, username: profile.username, activeRaceId: raceId, profilePictureUrl: profile.profile_picture_url)
-                loadedFriends.append(display)
+            self.friends = profiles.map { profile in
+                FriendDisplay(
+                    id: profile.id,
+                    username: profile.username,
+                    activeRaceId: activeRaceMap[profile.id],
+                    profilePictureUrl: profile.profile_picture_url
+                )
             }
-            
-            self.friends = loadedFriends
         } catch {
             print("❌ Error loading friends: \(error)")
             self.errorMessage = "Failed to load friends."

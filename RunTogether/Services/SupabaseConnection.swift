@@ -836,37 +836,99 @@ class SupabaseConnection: ObservableObject {
 
     /// Lists all friends for the current user
     func listFriends() async throws -> [String] {
+        let profiles = try await fetchFriendProfiles()
+        return profiles.map { $0.username }
+    }
+    
+    /// Fetches the full profile records for all of the current user's friends
+    func fetchFriendProfiles() async throws -> [Profile] {
         guard let userId = self.currentUserId else { return [] }
         
         do {
             let friends: [Friend] = try await client
-               .from("Friends")
-               .select()
-               .or("user_id_1.eq.\(userId.uuidString),user_id_2.eq.\(userId.uuidString)")
-               .execute()
-               .value ?? []
-
-           var friendIds: [UUID] = []
-
-           for f in friends {
-               if f.user_id_1 != userId { friendIds.append(f.user_id_1) }
-               if f.user_id_2 != userId { friendIds.append(f.user_id_2) }
-           }
-
-           if friendIds.isEmpty { return [] }
-
-           let profiles: [Profile] = try await client
-               .from("Profiles")
-               .select()
-               .in("id", values: friendIds.map { $0.uuidString })
-               .execute()
-               .value ?? []
-
-           return profiles.compactMap { $0.username }
+                .from("Friends")
+                .select()
+                .or("user_id_1.eq.\(userId.uuidString),user_id_2.eq.\(userId.uuidString)")
+                .execute()
+                .value ?? []
+            
+            var friendIds = Set<UUID>()
+            
+            for f in friends {
+                if f.user_id_1 != userId { friendIds.insert(f.user_id_1) }
+                if f.user_id_2 != userId { friendIds.insert(f.user_id_2) }
+            }
+            
+            guard !friendIds.isEmpty else { return [] }
+            
+            return try await fetchProfiles(userIds: Array(friendIds))
         }
         catch {
-            print("Error listing friends: \(error)")
+            print("Error fetching friend profiles: \(error)")
             return []
+        }
+    }
+    
+    /// Fetches profile records for a batch of user IDs
+    func fetchProfiles(userIds: [UUID]) async throws -> [Profile] {
+        guard !userIds.isEmpty else { return [] }
+        
+        do {
+            let profiles: [Profile] = try await client
+                .from("Profiles")
+                .select()
+                .in("id", values: userIds.map { $0.uuidString })
+                .execute()
+                .value ?? []
+            
+            return profiles
+        } catch {
+            print("Error fetching profiles: \(error)")
+            throw error
+        }
+    }
+    
+    /// Fetches active races (if any) for the supplied user ids
+    func fetchActiveRaces(for userIds: [UUID]) async throws -> [UUID: UUID] {
+        guard !userIds.isEmpty else { return [:] }
+        
+        do {
+            let participants: [RaceParticipants] = try await client
+                .from("Race_Participants")
+                .select()
+                .in("user_id", values: userIds.map { $0.uuidString })
+                .is("finish_time", value: nil)
+                .execute()
+                .value ?? []
+            
+            var mapping: [UUID: UUID] = [:]
+            for participant in participants {
+                mapping[participant.user_id] = participant.race_id
+            }
+            return mapping
+        }
+        catch {
+            print("Error fetching active races: \(error)")
+            return [:]
+        }
+    }
+    
+    /// Fetch run clubs for the provided names in a single batch
+    func fetchRunClubs(named names: [String]) async throws -> [RunClub] {
+        guard !names.isEmpty else { return [] }
+        
+        do {
+            let clubs: [RunClub] = try await client
+                .from("Run_Clubs")
+                .select()
+                .in("name", values: names)
+                .execute()
+                .value ?? []
+            
+            return clubs
+        } catch {
+            print("Error fetching run clubs: \(error)")
+            throw error
         }
     }
     

@@ -96,19 +96,19 @@ class LeaderboardTabViewModel: ObservableObject {
     }
     
     func fetchProfilesForEntries(_ entries: [GlobalLeaderboardEntry], appEnvironment: AppEnvironment) async {
-        for entry in entries {
-            // Skip if we already have this profile
-            if profiles[entry.user_id] != nil {
-                continue
+        let missingUserIds = entries
+            .map { $0.user_id }
+            .filter { profiles[$0] == nil }
+        
+        guard !missingUserIds.isEmpty else { return }
+        
+        do {
+            let fetchedProfiles = try await appEnvironment.supabaseConnection.fetchProfiles(userIds: Array(Set(missingUserIds)))
+            for profile in fetchedProfiles {
+                profiles[profile.id] = profile
             }
-            
-            do {
-                if let profile = try await appEnvironment.supabaseConnection.getProfileById(userId: entry.user_id) {
-                    profiles[entry.user_id] = profile
-                }
-            } catch {
-                print("Failed to fetch profile for user \(entry.user_id): \(error)")
-            }
+        } catch {
+            print("Failed to fetch profiles for leaderboard entries: \(error)")
         }
     }
     

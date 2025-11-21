@@ -13,6 +13,7 @@ struct FriendsTabView: View {
     @EnvironmentObject var appEnvironment: AppEnvironment
     @StateObject var viewModel = FriendsTabViewModel()
     @State private var searchText = ""
+    @State private var searchTask: Task<Void, Never>? = nil
     @State private var activeTab: FriendTab = .myFriends
     
     enum FriendTab {
@@ -50,6 +51,10 @@ struct FriendsTabView: View {
             if activeTab == .myFriends {
                 await viewModel.loadFriends(appEnvironment: appEnvironment)
             }
+        }
+        .onDisappear {
+            searchTask?.cancel()
+            searchTask = nil
         }
     }
     
@@ -118,12 +123,19 @@ struct FriendsTabView: View {
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                         .onChange(of: searchText) { _, newValue in
-                            Task {
-                                if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                    viewModel.clearSearchState()
-                                } else {
-                                    await viewModel.searchUsers(appEnvironment: appEnvironment, query: newValue)
-                                }
+                            searchTask?.cancel()
+                            
+                            let trimmedValue = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                            
+                            guard !trimmedValue.isEmpty else {
+                                viewModel.clearSearchState()
+                                return
+                            }
+                            
+                            searchTask = Task {
+                                try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s debounce
+                                if Task.isCancelled { return }
+                                await viewModel.searchUsers(appEnvironment: appEnvironment, query: trimmedValue)
                             }
                         }
                     

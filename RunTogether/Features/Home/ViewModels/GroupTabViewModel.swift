@@ -41,36 +41,21 @@ class GroupTabViewModel: ObservableObject {
         defer { isLoading = false }
         
         do {
-            // Get the club names the user is a member of
             let clubNames = try await appEnvironment.supabaseConnection.listMyRunClubs()
-            
             print("📋 User is member of clubs: \(clubNames)")
             
-            // Fetch full details for each club
-            var clubs: [RunClub] = []
-            for clubName in clubNames {
-                do {
-                    let fetchedClubs: [RunClub] = try await appEnvironment.supabaseConnection.client
-                        .from("Run_Clubs")
-                        .select()
-                        .eq("name", value: clubName)
-                        .execute()
-                        .value
-                    
-                    if let club = fetchedClubs.first {
-                        clubs.append(club)
-                        print("✅ Fetched club: \(club.name)")
-                    } else {
-                        print("⚠️ Club not found: \(clubName)")
-                    }
-                } catch {
-                    print("❌ Error fetching club \(clubName): \(error)")
-                }
+            guard !clubNames.isEmpty else {
+                runClubs = []
+                errorMessage = nil
+                return
             }
             
-            runClubs = clubs
+            let fetchedClubs = try await appEnvironment.supabaseConnection.fetchRunClubs(named: clubNames)
+            let clubsByName = Dictionary(uniqueKeysWithValues: fetchedClubs.map { ($0.name, $0) })
+            
+            runClubs = clubNames.compactMap { clubsByName[$0] }
             errorMessage = nil
-            print("✅ Total clubs loaded: \(clubs.count)")
+            print("✅ Total clubs loaded: \(runClubs.count)")
         } catch {
             print("❌ Error in fetchRunClubs: \(error)")
             errorMessage = "Failed to fetch run clubs: \(error.localizedDescription)"

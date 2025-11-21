@@ -275,13 +275,21 @@ class RaceResultsViewModel: ObservableObject {
         let userIds = participants.map { $0.user_id }
         var profiles: [UUID: Profile] = [:]
         
+        // Seed with cached profiles
         for userId in userIds {
-            // Check cache first
             if let cachedProfile = profileCache[userId] {
                 profiles[userId] = cachedProfile
-            } else if let profile = try? await appEnvironment.supabaseConnection.getProfileById(userId: userId) {
-                profiles[userId] = profile
-                profileCache[userId] = profile // Cache for future use
+            }
+        }
+        
+        // Fetch missing profiles in a single batch
+        let missingUserIds = userIds.filter { profiles[$0] == nil }
+        if !missingUserIds.isEmpty {
+            if let fetchedProfiles = try? await appEnvironment.supabaseConnection.fetchProfiles(userIds: Array(Set(missingUserIds))) {
+                for profile in fetchedProfiles {
+                    profiles[profile.id] = profile
+                    profileCache[profile.id] = profile
+                }
             }
         }
         

@@ -294,9 +294,13 @@ struct ProfileDetailView: View {
             return
         }
         
-        stats = await viewModel.getStats(appEnvironment: appEnvironment, username: username)
-        runClubs = await viewModel.getPersonalRunClubs(appEnvironment: appEnvironment, username: username)
-        await viewModel.refreshFriendStatus(appEnvironment: appEnvironment, username: username)
+        async let statsTask = viewModel.getStats(appEnvironment: appEnvironment, username: username)
+        async let clubsTask = viewModel.getPersonalRunClubs(appEnvironment: appEnvironment, username: username)
+        async let friendStatusTask = viewModel.refreshFriendStatus(appEnvironment: appEnvironment, username: username)
+        
+        stats = await statsTask
+        runClubs = await clubsTask
+        await friendStatusTask
         
         isLoading = false
     }
