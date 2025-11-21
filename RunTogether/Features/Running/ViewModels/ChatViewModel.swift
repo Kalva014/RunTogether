@@ -28,10 +28,13 @@ class ChatViewModel: ObservableObject {
     
     @Published var messages: [ChatMessage] = []
     @Published var isSubscribed: Bool = false
+    @Published var currentUsername: String = "You"
     
     init(raceId: UUID? = nil) {
         self.raceId = raceId
     }
+    
+    private var currentUserId: UUID?
     
     /// Start listening to chat messages
     func startChat(appEnvironment: AppEnvironment) async {
@@ -46,8 +49,10 @@ class ChatViewModel: ObservableObject {
             return
         }
         self.appEnvironment = appEnvironment
+        currentUserId = appEnvironment.supabaseConnection.currentUserId
         print("💬 [ChatViewModel] Starting chat for race: \(raceId)")
         await appEnvironment.supabaseConnection.subscribeToChatBroadcasts(raceId: raceId)
+        await loadCurrentUsername(from: appEnvironment)
         Task { @MainActor in
             await processChatMessages(appEnvironment: appEnvironment)
         }
@@ -65,7 +70,7 @@ class ChatViewModel: ObservableObject {
     }
     
     /// Send a chat message
-    func sendMessage(message: String, username: String) async {
+    func sendMessage(_ message: String) async {
         guard let raceId = raceId,
               let appEnvironment = appEnvironment,
               let userId = appEnvironment.supabaseConnection.currentUserId,
@@ -77,7 +82,7 @@ class ChatViewModel: ObservableObject {
         let chatMessage = ChatMessage(
             id: UUID(),
             userId: userId,
-            username: username,
+            username: currentUsername,
             message: message,
             timestamp: Date()
         )
@@ -87,7 +92,7 @@ class ChatViewModel: ObservableObject {
         await appEnvironment.supabaseConnection.broadcastChatMessage(
             raceId: raceId,
             message: message,
-            username: username
+            username: currentUsername
         )
     }
     
@@ -144,5 +149,20 @@ class ChatViewModel: ObservableObject {
         }
         
         print("🛑 Chat stream ended")
+    }
+    
+    func isMessageFromCurrentUser(_ message: ChatMessage) -> Bool {
+        guard let appEnvironment = appEnvironment else { return false }
+        return message.userId == appEnvironment.supabaseConnection.currentUserId
+    }
+    
+    private func loadCurrentUsername(from appEnvironment: AppEnvironment) async {
+        if let profile = try? await appEnvironment.supabaseConnection.getProfile() {
+            currentUsername = profile.username
+        } else if let fallback = appEnvironment.appUser?.username {
+            currentUsername = fallback
+        } else {
+            currentUsername = "You"
+        }
     }
 }

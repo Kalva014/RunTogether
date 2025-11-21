@@ -11,11 +11,9 @@ import SwiftUI
 
 struct ChatView: View {
     @StateObject var viewModel: ChatViewModel
-    @EnvironmentObject var appEnvironment: AppEnvironment
     @Binding var isPresented: Bool
     
     @State private var messageText: String = ""
-    @State private var username: String = "You"
     
     var body: some View {
         VStack(spacing: 0) {
@@ -33,13 +31,6 @@ struct ChatView: View {
             }
             .background(Color(white: 0.1))
             .cornerRadius(20, corners: [.topLeft, .topRight])
-        }
-        .onAppear {
-            Task {
-                if let profile = try? await appEnvironment.supabaseConnection.getProfile() {
-                    username = profile.username ?? "You"
-                }
-            }
         }
     }
     
@@ -117,7 +108,7 @@ struct ChatView: View {
     
     // MARK: - Message Row
     private func chatMessageRow(message: ChatMessage) -> some View {
-        let isCurrentUser = message.userId == appEnvironment.supabaseConnection.currentUserId
+        let isCurrentUser = viewModel.isMessageFromCurrentUser(message)
         
         return HStack {
             if isCurrentUser {
@@ -200,7 +191,7 @@ struct ChatView: View {
         guard !trimmedMessage.isEmpty else { return }
         
         Task {
-            await viewModel.sendMessage(message: trimmedMessage, username: username)
+            await viewModel.sendMessage(trimmedMessage)
             messageText = ""
         }
     }

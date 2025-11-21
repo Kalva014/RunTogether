@@ -13,8 +13,6 @@ struct FriendsTabView: View {
     @EnvironmentObject var appEnvironment: AppEnvironment
     @StateObject var viewModel = FriendsTabViewModel()
     @State private var searchText = ""
-    @State private var searchResults: [Profile] = []
-    @State private var isSearching = false
     @State private var activeTab: FriendTab = .myFriends
     
     enum FriendTab {
@@ -76,7 +74,7 @@ struct FriendsTabView: View {
                 Button(action: {
                     activeTab = .myFriends
                     searchText = ""
-                    searchResults = []
+                    viewModel.clearSearchState()
                     Task {
                         await viewModel.loadFriends(appEnvironment: appEnvironment)
                     }
@@ -93,7 +91,7 @@ struct FriendsTabView: View {
                 Button(action: {
                     activeTab = .discover
                     searchText = ""
-                    searchResults = []
+                    viewModel.clearSearchState()
                 }) {
                     Text("Discover")
                         .font(.headline)
@@ -119,18 +117,20 @@ struct FriendsTabView: View {
                         .foregroundColor(.white)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
-                        .onChange(of: searchText) { oldValue, newValue in
-                            // Auto-search as user types
+                        .onChange(of: searchText) { _, newValue in
                             Task {
-                                await performSearch()
+                                if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    viewModel.clearSearchState()
+                                } else {
+                                    await viewModel.searchUsers(appEnvironment: appEnvironment, query: newValue)
+                                }
                             }
                         }
                     
                     if !searchText.isEmpty {
                         Button(action: {
                             searchText = ""
-                            searchResults = []
-                            isSearching = false
+                            viewModel.clearSearchState()
                         }) {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundColor(.gray)
@@ -233,15 +233,15 @@ struct FriendsTabView: View {
             VStack(spacing: 12) {
                 if searchText.isEmpty {
                     discoverEmptyState
-                } else if isSearching {
+                } else if viewModel.isSearching {
                     ProgressView()
                         .tint(.orange)
                         .scaleEffect(1.5)
                         .padding(.top, 40)
-                } else if searchResults.isEmpty {
+                } else if viewModel.searchResults.isEmpty {
                     noResultsView
                 } else {
-                    ForEach(searchResults, id: \.id) { profile in
+                    ForEach(viewModel.searchResults, id: \.id) { profile in
                         NavigationLink(destination: ProfileDetailView(username: profile.username)) {
                             searchResultRow(profile: profile)
                         }
@@ -336,39 +336,6 @@ struct FriendsTabView: View {
         .padding(16)
         .background(Color.white.opacity(0.05))
         .cornerRadius(16)
-    }
-    
-    private func performSearch() async {
-        let trimmedSearch = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        guard !trimmedSearch.isEmpty else {
-            searchResults = []
-            isSearching = false
-            return
-        }
-        
-        isSearching = true
-        
-        do {
-            // Search for users by username (case-insensitive)
-            let profiles: [Profile] = try await appEnvironment.supabaseConnection.client
-                .from("Profiles")
-                .select()
-                .ilike("username", pattern: "%\(trimmedSearch)%")
-                .limit(20)
-                .execute()
-                .value ?? []
-            
-            // Filter out current user
-            searchResults = profiles.filter { $0.id != appEnvironment.supabaseConnection.currentUserId }
-            
-            print("🔍 Search for '\(trimmedSearch)' found \(searchResults.count) users")
-        } catch {
-            print("❌ Search error: \(error)")
-            searchResults = []
-        }
-        
-        isSearching = false
     }
     
     private var loadingView: some View {

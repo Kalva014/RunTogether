@@ -16,35 +16,12 @@ struct ProfileTabView: View {
     @State private var isEditing = false
     @State private var isSignedOut = false
     
-    @State private var username: String = ""
-    @State private var firstName: String = ""
-    @State private var lastName: String = ""
-    @State private var location: String = ""
-    @State private var profilePictureUrl: String? = nil
-    
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var selectedImage: UIImage? = nil
-    @State private var isUploadingImage = false
     @State private var showPhotoPermissionAlert = false
-    
-    @State private var originalValues: (String, String, String, String, String?) = ("", "", "", "", nil)
     
     init() {
         _viewModel = StateObject(wrappedValue: ProfileTabViewModel())
-    }
-    
-    private func loadUserData() async {
-        do {
-            guard let user = try await appEnvironment.supabaseConnection.getProfile() else { return }
-            username = user.username
-            firstName = user.first_name
-            lastName = user.last_name
-            location = user.location ?? ""
-            profilePictureUrl = user.profile_picture_url
-            originalValues = (username, firstName, lastName, location, profilePictureUrl)
-        } catch {
-            print("Failed to load user profile: \(error)")
-        }
     }
     
     private func requestPhotoLibraryPermission() {
@@ -66,39 +43,15 @@ struct ProfileTabView: View {
     
     private func saveChanges() {
         Task {
-            if let selectedImage = selectedImage {
-                isUploadingImage = true
-                do {
-                    guard let imageData = selectedImage.jpegData(compressionQuality: 0.8) else {
-                        isUploadingImage = false
-                        return
-                    }
-                    
-                    if let uploadedUrl = try await appEnvironment.supabaseConnection.uploadProfilePicture(imageData: imageData) {
-                        profilePictureUrl = uploadedUrl
-                    }
-                } catch {
-                    print("Failed to upload profile picture: \(error)")
-                }
-                isUploadingImage = false
-            }
-            
-            await viewModel.editProfile(
-                appEnvironment: appEnvironment,
-                username: username,
-                firstName: firstName,
-                lastName: lastName,
-                location: location,
-                profilePictureUrl: profilePictureUrl
-            )
-            isEditing = false
-            originalValues = (username, firstName, lastName, location, profilePictureUrl)
+            let imageData = selectedImage?.jpegData(compressionQuality: 0.8)
+            await viewModel.saveProfile(appEnvironment: appEnvironment, profileImageData: imageData)
             selectedImage = nil
+            isEditing = false
         }
     }
     
     private func cancelEditing() {
-        (username, firstName, lastName, location, profilePictureUrl) = originalValues
+        viewModel.resetForm()
         selectedImage = nil
         isEditing = false
     }
@@ -140,8 +93,8 @@ struct ProfileTabView: View {
             }
         }
         .onAppear {
-            Task { 
-                await loadUserData()
+            Task {
+                await viewModel.loadProfile(appEnvironment: appEnvironment)
                 await viewModel.loadStats(appEnvironment: appEnvironment)
             }
             // Request permission on first appearance
@@ -159,7 +112,7 @@ struct ProfileTabView: View {
                         .frame(width: 100, height: 100)
                         .clipShape(Circle())
                 } else {
-                    ProfilePictureView(imageUrl: profilePictureUrl, username: username, size: 100)
+                    ProfilePictureView(imageUrl: viewModel.profilePictureUrl, username: viewModel.username, size: 100)
                 }
                 
                 if isEditing {
@@ -209,22 +162,22 @@ struct ProfileTabView: View {
             
             if !isEditing {
                 VStack(spacing: 4) {
-                    Text("@\(username)")
+                    Text("@\(viewModel.username)")
                         .font(.title2)
                         .fontWeight(.bold)
                         .foregroundColor(.white)
                     
-                    if !firstName.isEmpty || !lastName.isEmpty {
-                        Text("\(firstName) \(lastName)")
+                    if !viewModel.firstName.isEmpty || !viewModel.lastName.isEmpty {
+                        Text("\(viewModel.firstName) \(viewModel.lastName)")
                             .font(.subheadline)
                             .foregroundColor(.gray)
                     }
                     
-                    if !location.isEmpty {
+                    if !viewModel.location.isEmpty {
                         HStack(spacing: 4) {
                             Image(systemName: "location.fill")
                                 .font(.caption)
-                            Text(location)
+                            Text(viewModel.location)
                                 .font(.subheadline)
                         }
                         .foregroundColor(.gray)
@@ -295,20 +248,20 @@ struct ProfileTabView: View {
         VStack(spacing: 16) {
             if isEditing {
                 VStack(spacing: 12) {
-                    editField(title: "Username", text: $username, placeholder: "Enter username")
-                    editField(title: "First Name", text: $firstName, placeholder: "Enter first name")
-                    editField(title: "Last Name", text: $lastName, placeholder: "Enter last name")
-                    editField(title: "Location", text: $location, placeholder: "Enter location")
+                    editField(title: "Username", text: $viewModel.username, placeholder: "Enter username")
+                    editField(title: "First Name", text: $viewModel.firstName, placeholder: "Enter first name")
+                    editField(title: "Last Name", text: $viewModel.lastName, placeholder: "Enter last name")
+                    editField(title: "Location", text: $viewModel.location, placeholder: "Enter location")
                 }
             } else {
                 VStack(spacing: 0) {
-                    profileRow(icon: "person.fill", title: "Username", value: username)
+                    profileRow(icon: "person.fill", title: "Username", value: viewModel.username)
                     Divider().background(Color.white.opacity(0.1))
-                    profileRow(icon: "person.text.rectangle", title: "First Name", value: firstName)
+                    profileRow(icon: "person.text.rectangle", title: "First Name", value: viewModel.firstName)
                     Divider().background(Color.white.opacity(0.1))
-                    profileRow(icon: "person.text.rectangle.fill", title: "Last Name", value: lastName)
+                    profileRow(icon: "person.text.rectangle.fill", title: "Last Name", value: viewModel.lastName)
                     Divider().background(Color.white.opacity(0.1))
-                    profileRow(icon: "location.fill", title: "Location", value: location)
+                    profileRow(icon: "location.fill", title: "Location", value: viewModel.location)
                 }
                 .background(Color.white.opacity(0.1))
                 .cornerRadius(16)
@@ -356,24 +309,22 @@ struct ProfileTabView: View {
         VStack(spacing: 12) {
             if isEditing {
                 Button(action: saveChanges) {
-                    if isUploadingImage {
-                        ProgressView()
-                            .tint(.black)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(Color.orange)
-                            .cornerRadius(12)
-                    } else {
-                        Text("Save Changes")
-                            .font(.headline)
-                            .foregroundColor(.black)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(Color.orange)
-                            .cornerRadius(12)
+                    Group {
+                        if viewModel.isSavingProfile {
+                            ProgressView()
+                                .tint(.black)
+                        } else {
+                            Text("Save Changes")
+                        }
                     }
+                    .font(.headline)
+                    .foregroundColor(viewModel.isSavingProfile ? .gray : .black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(viewModel.isSavingProfile ? Color.gray.opacity(0.3) : Color.orange)
+                    .cornerRadius(12)
                 }
-                .disabled(isUploadingImage)
+                .disabled(viewModel.isSavingProfile)
                 
                 Button(action: cancelEditing) {
                     Text("Cancel")

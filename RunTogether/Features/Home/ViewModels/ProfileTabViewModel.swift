@@ -11,8 +11,17 @@ import SwiftUI
 
 @MainActor
 class ProfileTabViewModel: ObservableObject {
-    @Published var myStats: GlobalLeaderboardEntry?
-    @Published var isLoadingStats = false
+@Published var myStats: GlobalLeaderboardEntry?
+@Published var isLoadingStats = false
+@Published var username: String = ""
+@Published var firstName: String = ""
+@Published var lastName: String = ""
+@Published var location: String = ""
+@Published var profilePictureUrl: String?
+@Published var isLoadingProfile = false
+@Published var isSavingProfile = false
+    
+    private var loadedProfile: Profile?
     
     func loadStats(appEnvironment: AppEnvironment) async {
         isLoadingStats = true
@@ -25,6 +34,53 @@ class ProfileTabViewModel: ObservableObject {
             }
         }
         isLoadingStats = false
+    }
+    
+    func loadProfile(appEnvironment: AppEnvironment) async {
+        isLoadingProfile = true
+        defer { isLoadingProfile = false }
+        
+        do {
+            guard let profile = try await appEnvironment.supabaseConnection.getProfile() else { return }
+            loadedProfile = profile
+            applyProfileToForm(profile)
+        } catch {
+            print("Failed to load user profile: \(error)")
+        }
+    }
+    
+    func resetForm() {
+        guard let profile = loadedProfile else { return }
+        applyProfileToForm(profile)
+    }
+    
+    func saveProfile(appEnvironment: AppEnvironment, profileImageData: Data?) async {
+        isSavingProfile = true
+        defer { isSavingProfile = false }
+        
+        var updatedProfilePictureUrl = profilePictureUrl
+        
+        if let data = profileImageData, !data.isEmpty {
+            do {
+                if let uploadedUrl = try await appEnvironment.supabaseConnection.uploadProfilePicture(imageData: data) {
+                    updatedProfilePictureUrl = uploadedUrl
+                }
+            } catch {
+                print("Failed to upload profile picture: \(error)")
+            }
+        }
+        
+        await editProfile(
+            appEnvironment: appEnvironment,
+            username: username,
+            firstName: firstName,
+            lastName: lastName,
+            location: location,
+            profilePictureUrl: updatedProfilePictureUrl
+        )
+        
+        profilePictureUrl = updatedProfilePictureUrl
+        updateLoadedProfile()
     }
     
     func editProfile(appEnvironment: AppEnvironment, username: String?, firstName: String?, lastName: String?, location: String?, profilePictureUrl: String? = nil) async {
@@ -43,5 +99,23 @@ class ProfileTabViewModel: ObservableObject {
         } catch {
             print("Error signing out: \(error.localizedDescription)")
         }
+    }
+    
+    private func applyProfileToForm(_ profile: Profile) {
+        username = profile.username
+        firstName = profile.first_name
+        lastName = profile.last_name
+        location = profile.location ?? ""
+        profilePictureUrl = profile.profile_picture_url
+    }
+    
+    private func updateLoadedProfile() {
+        guard var profile = loadedProfile else { return }
+        profile.username = username
+        profile.first_name = firstName
+        profile.last_name = lastName
+        profile.location = location
+        profile.profile_picture_url = profilePictureUrl
+        loadedProfile = profile
     }
 }

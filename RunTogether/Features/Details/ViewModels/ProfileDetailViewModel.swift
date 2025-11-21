@@ -6,12 +6,15 @@
 //
 import Foundation
 
+@MainActor
 class ProfileDetailViewModel: ObservableObject {
     @Published var userId: UUID?
+    @Published var isFriend: Bool = false
     
     func addFriend(appEnvironment: AppEnvironment, username: String) async {
         do {
             try await appEnvironment.supabaseConnection.addFriend(username: username)
+            isFriend = true
         } catch {
             print("Error adding friend: \(error.localizedDescription)")
         }
@@ -20,6 +23,7 @@ class ProfileDetailViewModel: ObservableObject {
     func removeFriend(appEnvironment: AppEnvironment, username: String) async {
         do {
             try await appEnvironment.supabaseConnection.removeFriend(username: username)
+            isFriend = false
         } catch {
             print("Error removing friend: \(error.localizedDescription)")
         }
@@ -29,9 +33,7 @@ class ProfileDetailViewModel: ObservableObject {
         do {
             let userInfo = try await appEnvironment.supabaseConnection.getProfileByUsername(username: username)
             if let userInfo = userInfo {
-                await MainActor.run {
-                    self.userId = userInfo.id
-                }
+                self.userId = userInfo.id
             }
             return userInfo
         } catch {
@@ -65,6 +67,16 @@ class ProfileDetailViewModel: ObservableObject {
         } catch {
             print("Error getting stats: \(error.localizedDescription)")
             return nil
+        }
+    }
+    
+    func refreshFriendStatus(appEnvironment: AppEnvironment, username: String) async {
+        do {
+            let friends = try await appEnvironment.supabaseConnection.listFriends()
+            isFriend = friends.contains(username)
+        } catch {
+            print("Error checking friend status: \(error)")
+            isFriend = false
         }
     }
 }

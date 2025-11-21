@@ -10,9 +10,12 @@ class FriendsTabViewModel: ObservableObject {
         let profilePictureUrl: String?
     }
     
-    @Published var friends: [FriendDisplay] = []
-    @Published var isLoading: Bool = false
-    @Published var errorMessage: String? = nil
+@Published var friends: [FriendDisplay] = []
+@Published var isLoading: Bool = false
+@Published var errorMessage: String? = nil
+@Published var searchResults: [Profile] = []
+@Published var isSearching: Bool = false
+@Published var searchErrorMessage: String? = nil
     
     func loadFriends(appEnvironment: AppEnvironment) async {
         guard let _ = appEnvironment.supabaseConnection.currentUserId else {
@@ -45,5 +48,45 @@ class FriendsTabViewModel: ObservableObject {
         }
         
         isLoading = false
+    }
+    
+    func searchUsers(appEnvironment: AppEnvironment, query: String) async {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        guard !trimmedQuery.isEmpty else {
+            searchResults = []
+            searchErrorMessage = nil
+            isSearching = false
+            return
+        }
+        
+        isSearching = true
+        searchErrorMessage = nil
+        
+        do {
+            let profiles: [Profile] = try await appEnvironment.supabaseConnection.client
+                .from("Profiles")
+                .select()
+                .ilike("username", pattern: "%\(trimmedQuery)%")
+                .limit(20)
+                .execute()
+                .value ?? []
+            
+            let currentUserId = appEnvironment.supabaseConnection.currentUserId
+            
+            self.searchResults = profiles.filter { $0.id != currentUserId }
+        } catch {
+            print("❌ Error searching users: \(error)")
+            searchErrorMessage = "Failed to search users."
+            searchResults = []
+        }
+        
+        isSearching = false
+    }
+    
+    func clearSearchState() {
+        searchResults = []
+        searchErrorMessage = nil
+        isSearching = false
     }
 }

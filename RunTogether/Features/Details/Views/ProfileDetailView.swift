@@ -17,7 +17,6 @@ struct ProfileDetailView: View {
     @State private var stats: GlobalLeaderboardEntry?
     @State private var runClubs: [String] = []
     @State private var isLoading = true
-    @State private var isFriend = false
     @State private var showError = false
     @State private var errorMessage = ""
     
@@ -107,7 +106,7 @@ struct ProfileDetailView: View {
     private var friendActionButton: some View {
         Button(action: {
             Task {
-                if isFriend {
+                if viewModel.isFriend {
                     await removeFriend()
                 } else {
                     await addFriend()
@@ -115,15 +114,15 @@ struct ProfileDetailView: View {
             }
         }) {
             HStack {
-                Image(systemName: isFriend ? "person.fill.xmark" : "person.fill.badge.plus")
-                Text(isFriend ? "Remove Friend" : "Add Friend")
+                Image(systemName: viewModel.isFriend ? "person.fill.xmark" : "person.fill.badge.plus")
+                Text(viewModel.isFriend ? "Remove Friend" : "Add Friend")
                     .fontWeight(.semibold)
             }
             .font(.headline)
-            .foregroundColor(isFriend ? .white : .black)
+            .foregroundColor(viewModel.isFriend ? .white : .black)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(isFriend ? Color.red.opacity(0.8) : Color.orange)
+            .background(viewModel.isFriend ? Color.red.opacity(0.8) : Color.orange)
             .cornerRadius(12)
         }
     }
@@ -297,28 +296,17 @@ struct ProfileDetailView: View {
         
         stats = await viewModel.getStats(appEnvironment: appEnvironment, username: username)
         runClubs = await viewModel.getPersonalRunClubs(appEnvironment: appEnvironment, username: username)
-        await checkFriendStatus()
+        await viewModel.refreshFriendStatus(appEnvironment: appEnvironment, username: username)
         
         isLoading = false
     }
     
-    private func checkFriendStatus() async {
-        do {
-            let friends = try await appEnvironment.supabaseConnection.listFriends()
-            isFriend = friends.contains(username)
-        } catch {
-            print("Error checking friend status: \(error)")
-        }
-    }
-    
     private func addFriend() async {
         await viewModel.addFriend(appEnvironment: appEnvironment, username: username)
-        await checkFriendStatus()
     }
     
     private func removeFriend() async {
         await viewModel.removeFriend(appEnvironment: appEnvironment, username: username)
-        await checkFriendStatus()
     }
 }
 
