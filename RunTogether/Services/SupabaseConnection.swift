@@ -16,6 +16,7 @@ class SupabaseConnection: ObservableObject {
     
     @Published var currentUserId: UUID?
     @Published var currentChannel: RealtimeChannelV2?
+    @Published var currentRaceChannelId: UUID?
     @Published var isAuthenticated: Bool = false
     
     init() {
@@ -311,11 +312,7 @@ class SupabaseConnection: ObservableObject {
 
     
     func leaveRace() async {
-        if let currentChannel = currentChannel {
-            await currentChannel.unsubscribe()
-            self.currentChannel = nil
-        }
-        // Add additional cleanup for chat/messaging as well:
+        await unsubscribeFromRaceBroadcasts()
         await unsubscribeFromChatBroadcasts()
     }
     
@@ -591,11 +588,17 @@ class SupabaseConnection: ObservableObject {
     /// Subscribes to low-latency broadcast updates for the current race.
     func subscribeToRaceBroadcasts(raceId: UUID) async {
         do {
+            if let activeRaceId = currentRaceChannelId, activeRaceId != raceId {
+                print("🔄 Switching race channel from \(activeRaceId) to \(raceId)")
+                await unsubscribeFromRaceBroadcasts()
+            }
+            
             let channel = try await getRaceChannel(raceId: raceId)
-            self.currentChannel = channel
             
             // Subscribe to the channel first
             try await channel.subscribeWithError()
+            currentChannel = channel
+            currentRaceChannelId = raceId
             print("✅ Subscribed to race broadcasts for \(raceId)")
             
             // Note: The stream processing should happen in the scene
@@ -608,20 +611,34 @@ class SupabaseConnection: ObservableObject {
    
    /// Closes the broadcast channel cleanly when the race ends.
    func unsubscribeFromRaceBroadcasts() async {
-       guard let channel = currentChannel else { return }
+       guard let channel = currentChannel else {
+           currentRaceChannelId = nil
+           return
+       }
        do {
            try await channel.unsubscribe()
            currentChannel = nil // Clear the channel reference
+           currentRaceChannelId = nil
            print("🛑 Unsubscribed from race broadcasts")
        } catch {
            print("Error unsubscribing: \(error)")
+           currentChannel = nil
+           currentRaceChannelId = nil
        }
    }
    
    /// Reuses or creates a broadcast channel for the race.
    private func getRaceChannel(raceId: UUID) async throws -> RealtimeChannelV2 {
-       if let channel = currentChannel {
+       if let channel = currentChannel, currentRaceChannelId == raceId {
            return channel
+       }
+       
+       if let existingChannel = currentChannel {
+           do {
+               try await existingChannel.unsubscribe()
+           } catch {
+               print("⚠️ Failed to unsubscribe previous race channel: \(error)")
+           }
        }
        
        let channel = client.channel("race:\(raceId)") {
@@ -629,6 +646,7 @@ class SupabaseConnection: ObservableObject {
        }
        
        self.currentChannel = channel
+       self.currentRaceChannelId = raceId
        return channel
    }
 
@@ -653,32 +671,14 @@ class SupabaseConnection: ObservableObject {
                     .eq("id", value: raceId.uuidString)
                     .execute()
                 
-                // Cleanup race updates
+                // Cleanup race updates to reduce noise, but keep race + participant data
                 try await self.client
                     .from("Race_Updates")
                     .delete()
                     .eq("race_id", value: raceId.uuidString)
                     .execute()
                 
-                // Wait a moment for any final database operations to complete
-                try await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
-                
-                // Delete the race participants (this should cascade delete the race if properly configured)
-                try await self.client
-                    .from("Race_Participants")
-                    .delete()
-                    .eq("race_id", value: raceId.uuidString)
-                    .execute()
-                
-                // Finally, delete the race itself
-                try await self.client
-                    .from("Races")
-                    .delete()
-                    .eq("id", value: raceId.uuidString)
-                    .execute()
-                
-                await leaveRace()
-                print("Race \(raceId) finished & completely deleted from database.")
+                print("Race \(raceId) finished — end_time set and live updates cleared (data retained for results).")
             }
         }
         catch {

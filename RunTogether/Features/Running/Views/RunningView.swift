@@ -134,6 +134,13 @@ struct RunningView: View {
                 }
             }
         }
+        .onChange(of: viewModel.raceScene.isRaceOver) { isRaceOver in
+            guard isRaceOver else { return }
+            Task {
+                await viewModel.stopRealtime(appEnvironment: appEnvironment)
+                await chatViewModel.stopChat()
+            }
+        }
         .onDisappear {
             Task {
                 await viewModel.stopRealtime(appEnvironment: appEnvironment)
