@@ -220,11 +220,11 @@ struct RunTabView: View {
                 .fontWeight(.bold)
                 .foregroundColor(.white)
             
-            // RACE MODE CARD — disabled if treadmill on
+            // RACE MODE CARD (Ranked) — disabled if treadmill on
             guidedRunCard(
                 title: "Race Mode",
-                subtitle: "Compete with others",
-                icon: "flag.checkered.2.crossed",
+                subtitle: "Compete in ranked matches",
+                icon: "trophy.fill",
                 color: .orange,
                 disabled: isTreadmillMode
             ) {
@@ -369,7 +369,12 @@ struct RunTabView: View {
                             .font(.subheadline)
                             .foregroundColor(.gray)
                         
-                        DatePicker("", selection: $selectedTime, displayedComponents: .hourAndMinute)
+                        DatePicker(
+                            "",
+                            selection: $selectedTime,
+                            in: Date()...,
+                            displayedComponents: .hourAndMinute
+                        )
                             .datePickerStyle(.wheel)
                             .labelsHidden()
                             .colorScheme(.dark)
@@ -378,8 +383,35 @@ struct RunTabView: View {
                     
                     VStack(spacing: 12) {
                         
+                        // =========== RANKED OPTIONS ============
+                        if activeMode == "ranked" {
+                            Button(action: {
+                                Task { await handleCreateRankedRace() }
+                            }) {
+                                Text("Create Ranked Match")
+                                    .font(.headline)
+                                    .foregroundColor(.black)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(Color.orange)
+                                    .cornerRadius(12)
+                            }
+                            
+                            Button(action: {
+                                Task { await handleJoinRandomRanked() }
+                            }) {
+                                Text("Find Ranked Match")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 16)
+                                    .background(Color.white.opacity(0.2))
+                                    .cornerRadius(12)
+                            }
+                        }
+                        
                         // =========== RACE OPTIONS ============
-                        if activeMode == "Race" {
+                        else if activeMode == "Race" {
                             Button(action: {
                                 Task { await handleCreateRace() }
                             }) {
@@ -388,7 +420,7 @@ struct RunTabView: View {
                                     .foregroundColor(.black)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 16)
-                                    .background(Color.orange)
+                                    .background(Color.blue)
                                     .cornerRadius(12)
                             }
                             
@@ -524,7 +556,7 @@ struct RunTabView: View {
         activeMode = "Race"
         guard let id = await viewModel.createRace(
             appEnvironment: appEnvironment,
-            mode: "Race",
+            mode: "ranked",
             start_time: selectedTime,
             distance: distanceConversion[selectedDistance] ?? 5000,
             useMiles: useMiles
@@ -576,7 +608,7 @@ struct RunTabView: View {
         activeMode = "Race"
         guard let id = await viewModel.joinRandomRace(
             appEnvironment: appEnvironment,
-            mode: "Race",
+            mode: "ranked",
             start_time: selectedTime,
             distance: distanceConversion[selectedDistance] ?? 5000,
             useMiles: useMiles
@@ -593,6 +625,39 @@ struct RunTabView: View {
         guard let id = await viewModel.joinRandomRace(
             appEnvironment: appEnvironment,
             mode: "Casual",
+            start_time: selectedTime,
+            distance: distanceConversion[selectedDistance] ?? 5000,
+            useMiles: useMiles
+        ) else { return }
+
+        createdRaceId = id
+        await waitForStart()
+    }
+    
+    @MainActor
+    private func handleCreateRankedRace() async {
+        showStartOptions = false
+        activeMode = "ranked"
+        guard let id = await viewModel.createRace(
+            appEnvironment: appEnvironment,
+            mode: "ranked",
+            start_time: selectedTime,
+            distance: distanceConversion[selectedDistance] ?? 5000,
+            useMiles: useMiles
+        ) else { return }
+        
+        createdRaceId = id
+        UIPasteboard.general.string = id.uuidString
+        await waitForStart()
+    }
+    
+    @MainActor
+    private func handleJoinRandomRanked() async {
+        showStartOptions = false
+        activeMode = "ranked"
+        guard let id = await viewModel.joinRandomRace(
+            appEnvironment: appEnvironment,
+            mode: "ranked",
             start_time: selectedTime,
             distance: distanceConversion[selectedDistance] ?? 5000,
             useMiles: useMiles

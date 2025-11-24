@@ -142,11 +142,12 @@ class SupabaseConnection: ObservableObject {
             try await client.storage
                 .from("profile-pictures")
                 .upload(
-                    path: fileName,
-                    file: imageData,
+                    fileName,
+                    data: imageData,
                     options: FileOptions(
                         cacheControl: "3600",
-                        contentType: "image/jpeg", upsert: true
+                        contentType: "image/jpeg",
+                        upsert: true
                     )
                 )
             
@@ -517,7 +518,7 @@ class SupabaseConnection: ObservableObject {
        do {
            let channel = try await getRaceChannel(raceId: raceId)
            
-           try await channel.broadcast(
+           await channel.broadcast(
                event: "update",
                message: [
                 "user_id": .string(userId.uuidString),
@@ -615,16 +616,10 @@ class SupabaseConnection: ObservableObject {
            currentRaceChannelId = nil
            return
        }
-       do {
-           try await channel.unsubscribe()
-           currentChannel = nil // Clear the channel reference
-           currentRaceChannelId = nil
-           print("🛑 Unsubscribed from race broadcasts")
-       } catch {
-           print("Error unsubscribing: \(error)")
-           currentChannel = nil
-           currentRaceChannelId = nil
-       }
+       await channel.unsubscribe()
+       currentChannel = nil // Clear the channel reference
+       currentRaceChannelId = nil
+       print("🛑 Unsubscribed from race broadcasts")
    }
    
    /// Reuses or creates a broadcast channel for the race.
@@ -634,11 +629,7 @@ class SupabaseConnection: ObservableObject {
        }
        
        if let existingChannel = currentChannel {
-           do {
-               try await existingChannel.unsubscribe()
-           } catch {
-               print("⚠️ Failed to unsubscribe previous race channel: \(error)")
-           }
+           await existingChannel.unsubscribe()
        }
        
        let channel = client.channel("race:\(raceId)") {
@@ -861,30 +852,23 @@ class SupabaseConnection: ObservableObject {
             
             guard !friendIds.isEmpty else { return [] }
             
-            return try await fetchProfiles(userIds: Array(friendIds))
-        }
-        catch {
-            print("Error fetching friend profiles: \(error)")
-            return []
-        }
-    }
-    
-    /// Fetches profile records for a batch of user IDs
-    func fetchProfiles(userIds: [UUID]) async throws -> [Profile] {
-        guard !userIds.isEmpty else { return [] }
-        
-        do {
             let profiles: [Profile] = try await client
                 .from("Profiles")
                 .select()
-                .in("id", values: userIds.map { $0.uuidString })
+                .in("id", values: friendIds.map { $0.uuidString })
                 .execute()
                 .value ?? []
             
             return profiles
-        } catch {
-            print("Error fetching profiles: \(error)")
-            throw error
+        }
+        catch {
+            if error.isCancelledRequest {
+                print("⚠️ fetchFriendProfiles cancelled")
+                return []
+            } else {
+                print("Error fetching friend profiles: \(error)")
+                return []
+            }
         }
     }
     
@@ -908,27 +892,13 @@ class SupabaseConnection: ObservableObject {
             return mapping
         }
         catch {
-            print("Error fetching active races: \(error)")
-            return [:]
-        }
-    }
-    
-    /// Fetch run clubs for the provided names in a single batch
-    func fetchRunClubs(named names: [String]) async throws -> [RunClub] {
-        guard !names.isEmpty else { return [] }
-        
-        do {
-            let clubs: [RunClub] = try await client
-                .from("Run_Clubs")
-                .select()
-                .in("name", values: names)
-                .execute()
-                .value ?? []
-            
-            return clubs
-        } catch {
-            print("Error fetching run clubs: \(error)")
-            throw error
+            if error.isCancelledRequest {
+                print("⚠️ fetchActiveRaces cancelled")
+                return [:]
+            } else {
+                print("Error fetching active races: \(error)")
+                return [:]
+            }
         }
     }
     
@@ -1093,8 +1063,13 @@ class SupabaseConnection: ObservableObject {
             return memberships.map { $0.group_id }
         }
         catch {
-            print("❌ Error listing run clubs: \(error)")
-            throw error
+            if error.isCancelledRequest {
+                print("⚠️ listMyRunClubs request cancelled")
+                return []
+            } else {
+                print("❌ Error listing run clubs: \(error)")
+                throw error
+            }
         }
     }
     
@@ -1112,6 +1087,26 @@ class SupabaseConnection: ObservableObject {
         catch {
             print("Error listing run clubs: \(error)")
             return []
+        }
+    }
+    
+    /// Fetch specific run clubs by name
+    func fetchRunClubs(named clubNames: [String]) async throws -> [RunClub] {
+        guard !clubNames.isEmpty else { return [] }
+        
+        do {
+            let clubs: [RunClub] = try await client
+                .from("Run_Clubs")
+                .select()
+                .in("name", values: clubNames)
+                .execute()
+                .value ?? []
+            
+            return clubs
+        }
+        catch {
+            print("Error fetching run clubs by name: \(error)")
+            throw error
         }
     }
     
@@ -1183,7 +1178,7 @@ class SupabaseConnection: ObservableObject {
     // MARK: - Live Post Race Chat
     var chatChannel: RealtimeChannelV2?
     // Track which raceId the chatChannel is for
-    internal(set) var currentChatRaceId: UUID?
+    private(set) var currentChatRaceId: UUID?
 
     /// Broadcasts a chat message to all participants (low-latency)
     func broadcastChatMessage(raceId: UUID, message: String, username: String) async {
@@ -1192,7 +1187,7 @@ class SupabaseConnection: ObservableObject {
         do {
             let channel = try await getChatChannel(raceId: raceId)
             
-            try await channel.broadcast(
+            await channel.broadcast(
                 event: "chat_message",
                 message: [
                     "user_id": .string(userId.uuidString),
@@ -1212,7 +1207,7 @@ class SupabaseConnection: ObservableObject {
             if let currentId = currentChatRaceId, currentId != raceId {
                 if let channel = chatChannel {
                     print("🛑 Unsubscribing old chat channel for raceId: \(currentId)")
-                    try? await channel.unsubscribe()
+                    await channel.unsubscribe()
                 }
                 chatChannel = nil
             }
@@ -1230,7 +1225,7 @@ class SupabaseConnection: ObservableObject {
     func unsubscribeFromChatBroadcasts() async {
         if let channel = chatChannel {
             print("🛑 Unsubscribing chatChannel for raceId: \(currentChatRaceId?.uuidString ?? "nil")")
-            try? await channel.unsubscribe()
+            await channel.unsubscribe()
         }
         chatChannel = nil
         currentChatRaceId = nil
@@ -1244,7 +1239,7 @@ class SupabaseConnection: ObservableObject {
         }
         if let channel = chatChannel, currentChatRaceId != raceId {
             print("🛑 Closing previous chatChannel for raceId: \(currentChatRaceId?.uuidString ?? "nil")")
-            try? await channel.unsubscribe()
+            await channel.unsubscribe()
             chatChannel = nil
             currentChatRaceId = nil
         }
@@ -1257,6 +1252,468 @@ class SupabaseConnection: ObservableObject {
         return channel
     }
     
+    
+    // MARK: - Ranked System Management
+    
+    /// Get or create ranked profile for current user
+    func getRankedProfile() async throws -> RankedProfile? {
+        guard let userId = self.currentUserId else { return nil }
+        
+        do {
+            // Try to fetch existing ranked profile
+            let profiles: [RankedProfile] = try await client
+                .from("Ranked_Profiles")
+                .select()
+                .eq("user_id", value: userId.uuidString)
+                .execute()
+                .value ?? []
+            
+            if let profile = profiles.first {
+                return profile
+            } else {
+                // Create new ranked profile if doesn't exist
+                return try await createRankedProfile(userId: userId)
+            }
+        } catch {
+            if error.isCancelledRequest {
+                print("⚠️ getRankedProfile cancelled")
+                return nil
+            } else {
+                print("Error fetching ranked profile: \(error)")
+                throw error
+            }
+        }
+    }
+    
+    /// Get ranked profile for a specific user
+    func getRankedProfile(userId: UUID) async throws -> RankedProfile? {
+        do {
+            let profiles: [RankedProfile] = try await client
+                .from("Ranked_Profiles")
+                .select()
+                .eq("user_id", value: userId.uuidString)
+                .execute()
+                .value ?? []
+            
+            if let profile = profiles.first {
+                return profile
+            } else {
+                // Create new ranked profile if doesn't exist
+                return try await createRankedProfile(userId: userId)
+            }
+        } catch {
+            if error.isCancelledRequest {
+                print("⚠️ getRankedProfile(\(userId)) cancelled")
+                return nil
+            } else {
+                print("Error fetching ranked profile for user \(userId): \(error)")
+                throw error
+            }
+        }
+    }
+    
+    /// Create a new ranked profile for a user (starts at Bronze IV, 0 LP)
+    private func createRankedProfile(userId: UUID) async throws -> RankedProfile {
+        let newProfile = RankedProfile.newProfile(userId: userId)
+        
+        do {
+            let created: [RankedProfile] = try await client
+                .from("Ranked_Profiles")
+                .insert(newProfile)
+                .select()
+                .execute()
+                .value ?? []
+            
+            print("✅ Created new ranked profile for user \(userId): Bronze IV - 0 LP")
+            return created.first ?? newProfile
+        } catch {
+            print("Error creating ranked profile: \(error)")
+            throw error
+        }
+    }
+    
+    /// Fetch ranked profiles for a batch of user IDs
+    func fetchRankedProfiles(for userIds: [UUID]) async throws -> [UUID: RankedProfile] {
+        guard !userIds.isEmpty else { return [:] }
+        
+        do {
+            let idStrings = userIds.map { $0.uuidString }
+            let profiles: [RankedProfile] = try await client
+                .from("Ranked_Profiles")
+                .select()
+                .in("user_id", values: idStrings)
+                .execute()
+                .value ?? []
+            
+            var map: [UUID: RankedProfile] = [:]
+            for profile in profiles {
+                map[profile.user_id] = profile
+            }
+            return map
+        } catch {
+            print("Error fetching ranked profiles batch: \(error)")
+            throw error
+        }
+    }
+    
+    /// Update ranked profile after a race completes
+    /// - Parameters:
+    ///   - userId: User ID to update
+    ///   - place: Finishing position in the race
+    ///   - totalRunners: Total number of runners in the race
+    /// - Returns: LPChangeResult showing the rank change details
+    func updateRankAfterRace(userId: UUID, place: Int, totalRunners: Int) async throws -> LPChangeResult {
+        do {
+            // Get current ranked profile
+            guard let profile = try await getRankedProfile(userId: userId) else {
+                throw NSError(domain: "SupabaseConnection", code: 404,
+                              userInfo: [NSLocalizedDescriptionKey: "Ranked profile not found"])
+            }
+            
+            let oldRank = profile.displayString
+            
+            // Calculate LP change
+            let lpChange = LPCalculator.calculateLPChange(place: place, totalRunners: totalRunners)
+            
+            // Apply LP change and handle promotion/demotion
+            let updatedProfile = LPCalculator.applyLPChange(to: profile, lpChange: lpChange)
+            
+            let newRank = updatedProfile.displayString
+            let promoted = updatedProfile.tier.numericValue > profile.tier.numericValue ||
+                          (updatedProfile.tier == profile.tier && 
+                           (updatedProfile.division?.rawValue ?? 0) < (profile.division?.rawValue ?? 0))
+            let demoted = updatedProfile.tier.numericValue < profile.tier.numericValue ||
+                         (updatedProfile.tier == profile.tier && 
+                          (updatedProfile.division?.rawValue ?? 0) > (profile.division?.rawValue ?? 0))
+            
+            // Increment total races
+            let currentTotalRaces = profile.total_races ?? 0
+            let newTotalRaces = currentTotalRaces + 1
+            
+            // Increment top 3 finishes if applicable
+            let currentTop3 = profile.top_3_finishes ?? 0
+            let newTop3 = place <= 3 ? currentTop3 + 1 : currentTop3
+            
+            // Update in database
+            let updates: [String: AnyJSON] = [
+                "rank_tier": .string(updatedProfile.rank_tier),
+                "rank_division": updatedProfile.rank_division != nil ? .integer(updatedProfile.rank_division!) : .null,
+                "league_points": .integer(updatedProfile.league_points),
+                "top_3_finishes": .integer(newTop3),
+                "total_races": .integer(newTotalRaces),
+                "updated_at": .string(ISO8601DateFormatter().string(from: Date()))
+            ]
+            
+            _ = try await client
+                .from("Ranked_Profiles")
+                .update(updates)
+                .eq("user_id", value: userId.uuidString)
+                .execute()
+            
+            print("✅ Updated rank for user \(userId): \(oldRank) → \(newRank) (\(lpChange > 0 ? "+" : "")\(lpChange) LP)")
+            
+            return LPChangeResult(
+                oldRank: oldRank,
+                newRank: newRank,
+                lpChange: lpChange,
+                promoted: promoted,
+                demoted: demoted,
+                newLP: updatedProfile.league_points,
+                oldLP: profile.league_points,
+                tier: updatedProfile.tier,
+                division: updatedProfile.division
+            )
+        } catch {
+            print("Error updating rank after race: \(error)")
+            throw error
+        }
+    }
+    
+    /// Increment ranked wins for a user
+    /// Fetch ranked leaderboard (sorted by rank tier, division, and LP)
+    /// - Parameters:
+    ///   - page: Page number for pagination
+    ///   - pageSize: Number of entries per page
+    /// - Returns: Array of ranked leaderboard entries
+    func fetchRankedLeaderboard(page: Int = 0, pageSize: Int = 10) async throws -> [RankedLeaderboardEntry] {
+        do {
+            let offset = page * pageSize
+            
+            // Fetch all profiles and sort in Swift (Supabase can't sort by multiple custom fields easily)
+            let allProfiles: [RankedProfile] = try await client
+                .from("Ranked_Profiles")
+                .select()
+                .execute()
+                .value ?? []
+            
+            // Sort by rank tier (desc), division (asc), LP (desc)
+            let sortedProfiles = allProfiles.sorted { p1, p2 in
+                // Compare tier first (higher tier = better)
+                if p1.tier.numericValue != p2.tier.numericValue {
+                    return p1.tier.numericValue > p2.tier.numericValue
+                }
+                
+                // If same tier, compare division (lower division number = better, e.g., I < IV)
+                if p1.tier != .champion {
+                    let div1 = p1.division?.rawValue ?? 99
+                    let div2 = p2.division?.rawValue ?? 99
+                    if div1 != div2 {
+                        return div1 < div2
+                    }
+                }
+                
+                // If same division, compare LP (higher LP = better)
+                return p1.league_points > p2.league_points
+            }
+            
+            // Paginate
+            let start = offset
+            let end = min(offset + pageSize, sortedProfiles.count)
+            let paginatedProfiles = Array(sortedProfiles[start..<end])
+            
+            // Convert to leaderboard entries
+            let entries = paginatedProfiles.map { profile in
+                RankedLeaderboardEntry(
+                    id: profile.id,
+                    user_id: profile.user_id,
+                    rank_tier: profile.rank_tier,
+                    rank_division: profile.rank_division,
+                    league_points: profile.league_points,
+                    top_3_finishes: profile.top_3_finishes,
+                    total_races: profile.total_races
+                )
+            }
+            
+            return entries
+        } catch {
+            print("Error fetching ranked leaderboard: \(error)")
+            throw error
+        }
+    }
+    
+    /// Fetch ranked leaderboard for friends only
+    func fetchFriendsRankedLeaderboard() async throws -> [RankedLeaderboardEntry] {
+        guard let userId = self.currentUserId else { return [] }
+        
+        do {
+            // Get friend IDs
+            let friendProfiles = try await fetchFriendProfiles()
+            let friendIds = friendProfiles.map { $0.id }
+            
+            guard !friendIds.isEmpty else { return [] }
+            
+            // Fetch ranked profiles for friends
+            let profiles: [RankedProfile] = try await client
+                .from("Ranked_Profiles")
+                .select()
+                .in("user_id", values: friendIds.map { $0.uuidString })
+                .execute()
+                .value ?? []
+            
+            // Also include current user
+            if let myProfile = try await getRankedProfile() {
+                var allProfiles = profiles
+                if !allProfiles.contains(where: { $0.user_id == userId }) {
+                    allProfiles.append(myProfile)
+                }
+                
+                // Sort by rank
+                let sortedProfiles = allProfiles.sorted { p1, p2 in
+                    if p1.tier.numericValue != p2.tier.numericValue {
+                        return p1.tier.numericValue > p2.tier.numericValue
+                    }
+                    if p1.tier != .champion {
+                        let div1 = p1.division?.rawValue ?? 99
+                        let div2 = p2.division?.rawValue ?? 99
+                        if div1 != div2 {
+                            return div1 < div2
+                        }
+                    }
+                    return p1.league_points > p2.league_points
+                }
+                
+                // Convert to leaderboard entries
+                return sortedProfiles.map { profile in
+                    RankedLeaderboardEntry(
+                        id: profile.id,
+                        user_id: profile.user_id,
+                        rank_tier: profile.rank_tier,
+                        rank_division: profile.rank_division,
+                        league_points: profile.league_points,
+                        top_3_finishes: profile.top_3_finishes,
+                        total_races: profile.total_races
+                    )
+                }
+            }
+            
+            return []
+        } catch {
+            print("Error fetching friends ranked leaderboard: \(error)")
+            throw error
+        }
+    }
+    
+    /// Get current user's rank position on the global ranked leaderboard
+    func getMyRankedPosition() async throws -> Int? {
+        guard let userId = self.currentUserId else { return nil }
+        
+        do {
+            guard try await getRankedProfile() != nil else { return nil }
+            
+            // Fetch all profiles
+            let allProfiles: [RankedProfile] = try await client
+                .from("Ranked_Profiles")
+                .select()
+                .execute()
+                .value ?? []
+            
+            // Sort by rank
+            let sortedProfiles = allProfiles.sorted { p1, p2 in
+                if p1.tier.numericValue != p2.tier.numericValue {
+                    return p1.tier.numericValue > p2.tier.numericValue
+                }
+                if p1.tier != .champion {
+                    let div1 = p1.division?.rawValue ?? 99
+                    let div2 = p2.division?.rawValue ?? 99
+                    if div1 != div2 {
+                        return div1 < div2
+                    }
+                }
+                return p1.league_points > p2.league_points
+            }
+            
+            // Find position
+            if let position = sortedProfiles.firstIndex(where: { $0.user_id == userId }) {
+                return position + 1 // 1-based ranking
+            }
+            
+            return nil
+        } catch {
+            if error.isCancelledRequest {
+                print("⚠️ getMyRankedPosition cancelled")
+                return nil
+            } else {
+                print("Error getting ranked position: \(error)")
+                throw error
+            }
+        }
+    }
+    
+    /// Find available ranked races for matchmaking
+    /// - Parameters:
+    ///   - mode: Race mode
+    ///   - distance: Race distance in meters
+    ///   - useMiles: Whether to use miles
+    ///   - maxSpread: Maximum tier spread for matchmaking (1 = ±1 tier, 2 = ±2 tiers)
+    /// - Returns: Available race IDs that match the criteria
+    func findRankedMatches(mode: String, distance: Double, useMiles: Bool, maxSpread: Int = 1) async throws -> [Race] {
+        guard self.currentUserId != nil else { return [] }
+        
+        do {
+            // Get user's ranked profile
+            guard let myProfile = try await getRankedProfile() else { return [] }
+            
+            // Get acceptable tier range
+            _ = RankMatchmaking.getTierRange(for: myProfile.tier, spread: maxSpread)
+            
+            // Fetch open races matching mode and distance
+            let races: [Race] = try await client
+                .from("Races")
+                .select()
+                .eq("mode", value: mode)
+                .eq("distance", value: distance)
+                .is("end_time", value: nil)
+                .execute()
+                .value ?? []
+            
+            // Filter races by checking participant ranks
+            var suitableRaces: [Race] = []
+            
+            for race in races {
+                guard let raceId = race.id else { continue }
+                
+                // Check if race is still joinable (not too far progressed)
+                let raceAge = Date().timeIntervalSince(race.start_time)
+                let maxJoinableAge: TimeInterval = 300 // 5 minutes
+                
+                if raceAge > maxJoinableAge {
+                    continue
+                }
+                
+                // Get participants of this race
+                let participants: [RaceParticipants] = try await client
+                    .from("Race_Participants")
+                    .select()
+                    .eq("race_id", value: raceId.uuidString)
+                    .execute()
+                    .value ?? []
+                
+                // Check if any participant has a compatible rank
+                var isCompatible = true
+                for participant in participants {
+                    if let participantProfile = try? await getRankedProfile(userId: participant.user_id) {
+                        if !RankMatchmaking.canMatch(tier1: myProfile.tier, tier2: participantProfile.tier, maxSpread: maxSpread) {
+                            isCompatible = false
+                            break
+                        }
+                    }
+                }
+                
+                if isCompatible {
+                    suitableRaces.append(race)
+                }
+            }
+            
+            return suitableRaces
+        } catch {
+            print("Error finding ranked matches: \(error)")
+            throw error
+        }
+    }
+    
+    /// Create a ranked race
+    func createRankedRace(name: String? = nil, mode: String, start_time: Date, distance: Double, useMiles: Bool) async throws -> Race? {
+        // For now, ranked races use the same table as regular races
+        // Just set mode to "ranked" to distinguish them
+        return try await createRace(name: name, mode: "ranked", start_time: start_time, distance: distance, useMiles: useMiles)
+    }
+    
+    /// Join a ranked race with matchmaking validation
+    func joinRankedRace(raceId: UUID, maxParticipants: Int) async throws -> UUID? {
+        guard self.currentUserId != nil else { return nil }
+        
+        do {
+            // Get user's ranked profile
+            guard let myProfile = try await getRankedProfile() else {
+                throw NSError(domain: "SupabaseConnection", code: 404,
+                              userInfo: [NSLocalizedDescriptionKey: "Ranked profile not found"])
+            }
+            
+            // Get race participants
+            let participants: [RaceParticipants] = try await client
+                .from("Race_Participants")
+                .select()
+                .eq("race_id", value: raceId.uuidString)
+                .execute()
+                .value ?? []
+            
+            // Check rank compatibility
+            for participant in participants {
+                if let participantProfile = try? await getRankedProfile(userId: participant.user_id) {
+                    if !RankMatchmaking.canMatch(tier1: myProfile.tier, tier2: participantProfile.tier, maxSpread: 2) {
+                        print("❌ Rank mismatch: Cannot join race with participants of very different rank")
+                        return nil
+                    }
+                }
+            }
+            
+            // Join the race using existing method
+            return try await joinRaceWithCap(raceId: raceId, maxParticipants: maxParticipants)
+        } catch {
+            print("Error joining ranked race: \(error)")
+            throw error
+        }
+    }
     
     // MARK: - Global Leaderboard Management
     /// Fetch the top N users on the global leaderboard

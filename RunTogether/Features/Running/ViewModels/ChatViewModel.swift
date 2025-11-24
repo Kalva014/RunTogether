@@ -103,7 +103,7 @@ class ChatViewModel: ObservableObject {
             return
         }
         
-        let stream = await channel.broadcastStream(event: "chat_message")
+        let stream = channel.broadcastStream(event: "chat_message")
         print("✅ Started listening to chat stream")
         
         for await message in stream {

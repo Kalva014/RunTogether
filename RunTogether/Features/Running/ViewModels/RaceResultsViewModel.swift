@@ -12,20 +12,27 @@ import Combine
 class RaceResultsViewModel: ObservableObject {
     @Published var leaderboard: [RunnerData] = []
     @Published var isUpdating: Bool = false
+    @Published var lpChangeResult: LPChangeResult?
+    @Published var showLPChange: Bool = false
     
     private let initialLeaderboard: [RunnerData]
     private var realtimeOpponents: [UUID: RealtimeOpponentData] = [:]
     private var profileCache: [UUID: Profile] = [:] // Cache profiles for quick lookup
+    private var rankProfileCache: [UUID: RankedProfile] = [:] // Cache ranked profiles
+    private var lastParticipantCount: Int = 0
     private var raceId: UUID?
     private var appEnvironment: AppEnvironment?
     private var useMiles: Bool
     private var cachedRaceStartTime: Date? // Cache race start time to avoid repeated fetches
+    private var cachedRaceDetails: Race? // Cache full race details (distance, etc.)
+    private var isRankedRace: Bool = false // Track if this is a ranked race
     
-    init(initialLeaderboard: [RunnerData], raceId: UUID?, useMiles: Bool) {
+    init(initialLeaderboard: [RunnerData], raceId: UUID?, useMiles: Bool, isRankedRace: Bool = false) {
         self.initialLeaderboard = initialLeaderboard
         self.leaderboard = initialLeaderboard
         self.raceId = raceId
         self.useMiles = useMiles
+        self.isRankedRace = isRankedRace
     }
     
     func startRealtimeUpdates(appEnvironment: AppEnvironment) async {
@@ -56,10 +63,14 @@ class RaceResultsViewModel: ObservableObject {
     func stopRealtimeUpdates() async {
         guard let appEnvironment = appEnvironment else { return }
         
+        // Cancel polling task
+        finishTimePollingTask?.cancel()
+        finishTimePollingTask = nil
+        
         await appEnvironment.supabaseConnection.unsubscribeFromRaceBroadcasts()
         realtimeOpponents.removeAll() // Only clear in-memory real-time cache
         // Do NOT clear the leaderboard array here, as the completed runners leaderboard must persist for results view
-        print("🛑 Stopped realtime leaderboard updates")
+        print("🛑 Stopped realtime leaderboard updates and polling")
     }
     
     private func processRealtimeMessages(appEnvironment: AppEnvironment) async {
@@ -68,7 +79,7 @@ class RaceResultsViewModel: ObservableObject {
             return
         }
         
-        let stream = await channel.broadcastStream(event: "update")
+        let stream = channel.broadcastStream(event: "update")
         print("✅ Started listening to leaderboard update stream")
         
         for await message in stream {
@@ -97,7 +108,7 @@ class RaceResultsViewModel: ObservableObject {
                 realtimeOpponents[userId]?.paceMinutes = pace
                 realtimeOpponents[userId]?.speedMps = speedMps
                 realtimeOpponents[userId]?.lastUpdateTime = Date()
-                print("📊 RaceResults: Updated opponent \(userId) - distance: \(distance)m")
+                // Reduced logging
                 await updateLeaderboard()
             } else {
                 // Fetch profile for new opponent
@@ -123,7 +134,7 @@ class RaceResultsViewModel: ObservableObject {
         isUpdating = true
         defer { isUpdating = false }
         
-        print("📊 RaceResults: Updating leaderboard with \(realtimeOpponents.count) realtime opponents")
+        // Removed verbose logging
         
         // Use current leaderboard state (which includes finished runners from database)
         let currentFinishedRunners = leaderboard.filter { $0.finishTime != nil }
@@ -133,7 +144,7 @@ class RaceResultsViewModel: ObservableObject {
         var seenRealtimeRunnerNames = Set<String>()
         
         // Add active runners from realtime data
-        for (userId, opponent) in realtimeOpponents where !opponent.isStale {
+        for (_, opponent) in realtimeOpponents where !opponent.isStale {
             // Check if this runner already finished
             let existingFinishedRunner = currentFinishedRunners.first { runner in
                 runner.name == opponent.username
@@ -183,13 +194,8 @@ class RaceResultsViewModel: ObservableObject {
             }
         }
         
-        print("📊 Realtime leaderboard updated with \(leaderboard.count) runners:")
-        for (index, runner) in leaderboard.enumerated() {
-            let status = runner.finishTime != nil ? "FINISHED" : "ACTIVE"
-            let timeOrDistance = runner.finishTime != nil ? 
-                "time: \(runner.finishTime!)" : "distance: \(runner.distance)m"
-            print("  \(index + 1). \(runner.name) (\(status)) - \(timeOrDistance)")
-        }
+        // Reduced logging to prevent spam
+        print("📊 Realtime leaderboard updated: \(leaderboard.filter { $0.finishTime != nil }.count) finished, \(leaderboard.filter { $0.finishTime == nil }.count) active")
     }
     
     private func formatPace(paceMinutes: Double) -> String {
@@ -208,7 +214,7 @@ class RaceResultsViewModel: ObservableObject {
         finishTimePollingTask = Task {
             while !Task.isCancelled {
                 await checkFinishTimes()
-                try? await Task.sleep(nanoseconds: 3_000_000_000) // Poll every 3 seconds
+                try? await Task.sleep(nanoseconds: 5_000_000_000) // Poll every 5 seconds (reduced frequency)
             }
         }
     }
@@ -236,6 +242,12 @@ class RaceResultsViewModel: ObservableObject {
             // Build complete leaderboard with all participants
             await buildCompleteLeaderboard(participants: participants, appEnvironment: appEnvironment)
             
+            if participants.allSatisfy({ $0.finish_time != nil }) {
+                finishTimePollingTask?.cancel()
+                finishTimePollingTask = nil
+                print("✅ All participants finished — stopped finish time polling")
+            }
+            
         } catch {
             print("Error checking finish times: \(error)")
         }
@@ -244,25 +256,31 @@ class RaceResultsViewModel: ObservableObject {
     private func buildCompleteLeaderboard(participants: [RaceParticipants], appEnvironment: AppEnvironment) async {
         var completeLeaderboard: [RunnerData] = []
         
-        // Get race start time (only fetch once)
+        // Get race start time & distance (only fetch once)
         var raceStartTime: Date?
-        if cachedRaceStartTime == nil {
-            if let raceId = raceId {
-                do {
-                    let race = try await appEnvironment.supabaseConnection.getRaceDetails(raceId: raceId)
-                    cachedRaceStartTime = race.start_time
-                    raceStartTime = race.start_time
-                    print("📅 Race start time: \(race.start_time)")
-                } catch {
-                    print("❌ Error fetching race start time: \(error)")
-                    // Fallback: use a reasonable start time (current time minus 10 minutes)
-                    cachedRaceStartTime = Date().addingTimeInterval(-600)
-                    raceStartTime = cachedRaceStartTime
-                    print("📅 Using fallback race start time: \(raceStartTime!)")
-                }
+        var raceDistance: Double?
+        
+        if let cachedDetails = cachedRaceDetails {
+            raceStartTime = cachedRaceStartTime ?? cachedDetails.start_time
+            raceDistance = cachedDetails.distance
+        } else if let raceId {
+            do {
+                let race = try await appEnvironment.supabaseConnection.getRaceDetails(raceId: raceId)
+                cachedRaceDetails = race
+                cachedRaceStartTime = race.start_time
+                raceStartTime = race.start_time
+                raceDistance = race.distance
+                print("📅 Race start time: \(race.start_time)")
+            } catch {
+                print("❌ Error fetching race start time: \(error)")
             }
-        } else {
+        }
+        
+        if raceStartTime == nil {
+            // Fallback: use a reasonable start time (current time minus 10 minutes)
+            cachedRaceStartTime = Date().addingTimeInterval(-600)
             raceStartTime = cachedRaceStartTime
+            print("📅 Using fallback race start time: \(raceStartTime!)")
         }
         
         // Create a map of initial leaderboard data (by name) to preserve finish times and paces
@@ -275,27 +293,33 @@ class RaceResultsViewModel: ObservableObject {
         let userIds = participants.map { $0.user_id }
         var profiles: [UUID: Profile] = [:]
         
-        // Seed with cached profiles
         for userId in userIds {
+            // Check cache first
             if let cachedProfile = profileCache[userId] {
                 profiles[userId] = cachedProfile
+            } else if let profile = try? await appEnvironment.supabaseConnection.getProfileById(userId: userId) {
+                profiles[userId] = profile
+                profileCache[userId] = profile // Cache for future use
             }
         }
         
-        // Fetch missing profiles in a single batch
-        let missingUserIds = userIds.filter { profiles[$0] == nil }
-        if !missingUserIds.isEmpty {
-            if let fetchedProfiles = try? await appEnvironment.supabaseConnection.fetchProfiles(userIds: Array(Set(missingUserIds))) {
-                for profile in fetchedProfiles {
-                    profiles[profile.id] = profile
-                    profileCache[profile.id] = profile
+        // Fetch ranked profiles for participants (batch)
+        let uniqueIds = Array(Set(userIds))
+        let missingRankIds = uniqueIds.filter { rankProfileCache[$0] == nil }
+        if !missingRankIds.isEmpty {
+            if let rankedProfiles = try? await appEnvironment.supabaseConnection.fetchRankedProfiles(for: missingRankIds) {
+                for (userId, rankedProfile) in rankedProfiles {
+                    rankProfileCache[userId] = rankedProfile
                 }
             }
         }
         
+        lastParticipantCount = participants.count
+        
         // Build leaderboard from participants
         for participant in participants {
             let username = profiles[participant.user_id]?.username ?? "Unknown"
+            let rankedProfile = rankProfileCache[participant.user_id]
             
             // Calculate finish time from database first (more reliable than initial leaderboard)
             var finishTime: TimeInterval? = nil
@@ -335,31 +359,22 @@ class RaceResultsViewModel: ObservableObject {
                     if let dateFormatter = formatter as? DateFormatter {
                         if let finishTimeDate = dateFormatter.date(from: finishTimeString) {
                             finishTime = finishTimeDate.timeIntervalSince(startTime)
-                            print("✅ Calculated finish time for \(username): \(finishTime ?? 0) seconds using DateFormatter")
-                            print("   📅 Start: \(startTime), Finish: \(finishTimeDate)")
+                            // Successfully parsed finish time
                             break
                         }
                     } else if let iso8601Formatter = formatter as? ISO8601DateFormatter {
                         if let finishTimeDate = iso8601Formatter.date(from: finishTimeString) {
                             finishTime = finishTimeDate.timeIntervalSince(startTime)
-                            print("✅ Calculated finish time for \(username): \(finishTime ?? 0) seconds using ISO8601DateFormatter")
-                            print("   📅 Start: \(startTime), Finish: \(finishTimeDate)")
+                            // Successfully parsed finish time
                             break
                         }
                     }
-                }
-                
-                if finishTime == nil {
-                    print("⚠️ Could not parse finish_time '\(finishTimeString)' for \(username) with any formatter")
                 }
             }
             
             // If database doesn't have finish time, try initial leaderboard as fallback
             if finishTime == nil, let initialRunner = initialDataMap[username] {
                 finishTime = initialRunner.finishTime
-                if finishTime != nil {
-                    print("📊 \(username): Using initial leaderboard finish time: \(finishTime!)")
-                }
             }
             
             // Get current distance and pace from realtime data or participant data
@@ -370,48 +385,30 @@ class RaceResultsViewModel: ObservableObject {
                 // Still running - use realtime data
                 distance = CGFloat(opponent.distance)
                 pace = formatPace(paceMinutes: opponent.paceMinutes)
-                print("📊 \(username): Using realtime data - pace: \(pace)")
             } else if let initialRunner = initialDataMap[username], !initialRunner.pace.isEmpty && initialRunner.pace != "--:--" {
                 // Use initial leaderboard pace if available
                 distance = initialRunner.distance
                 pace = initialRunner.pace
-                print("📊 \(username): Using initial leaderboard data - pace: \(pace)")
+                // Reduced logging
             } else if participant.finish_time != nil {
-                // Finished - use full race distance (they completed the race)
-                // Get race distance from the race details
-                if let raceId = raceId {
-                    do {
-                        let race = try await appEnvironment.supabaseConnection.getRaceDetails(raceId: raceId)
-                        distance = CGFloat(race.distance) // Use full race distance for finished runners
-                    } catch {
-                        // Fallback to participant distance if race details unavailable
-                        distance = CGFloat(max(participant.distance_covered, 0))
-                    }
-                } else {
-                    distance = CGFloat(max(participant.distance_covered, 0))
-                }
+                // Finished - show full race distance (cached)
+                let fullDistance = raceDistance ?? participant.distance_covered
+                let normalizedDistance = max(max(fullDistance, participant.distance_covered), 0)
+                distance = CGFloat(normalizedDistance)
                 
                 if let avgPace = participant.average_pace, avgPace > 0 {
                     pace = formatPace(paceMinutes: avgPace)
-                    print("🏁 \(username): Finished - average_pace: \(avgPace), formatted: \(pace)")
+                } else if let ft = finishTime, ft > 0, fullDistance > 0 {
+                    let distanceKm = fullDistance / 1000.0
+                    let paceMinutes = distanceKm > 0 ? (ft / 60.0) / distanceKm : 0
+                    pace = distanceKm > 0 ? formatPace(paceMinutes: paceMinutes) : "--:--"
                 } else {
-                    // Calculate pace from distance and finish time if available
-                    if let ft = finishTime, ft > 0 {
-                        // Calculate average pace in min/km or min/mi
-                        let distanceKm = participant.distance_covered / 1000.0
-                        let paceMinutes = ft / 60.0 / distanceKm
-                        pace = formatPace(paceMinutes: paceMinutes)
-                        print("🏁 \(username): Calculated pace from finish time: \(pace)")
-                    } else {
-                        pace = "--:--"
-                        print("⚠️ \(username): Finished but no average_pace and can't calculate")
-                    }
+                    pace = "--:--"
                 }
             } else {
                 // No recent update - use last known distance
                 distance = CGFloat(participant.distance_covered)
                 pace = "--:--"
-                print("📊 \(username): No realtime data or finish time - pace: --:--")
             }
             
             let profile = profiles[participant.user_id]
@@ -421,7 +418,11 @@ class RaceResultsViewModel: ObservableObject {
                 pace: pace,
                 finishTime: finishTime,
                 speed: nil,
-                profilePictureUrl: profile?.profile_picture_url
+                profilePictureUrl: profile?.profile_picture_url,
+                rankDisplay: rankedProfile?.displayString,
+                rankEmoji: rankedProfile?.tier.emoji,
+                leaguePoints: rankedProfile?.league_points,
+                rankTier: rankedProfile?.tier
             ))
         }
         
@@ -437,30 +438,67 @@ class RaceResultsViewModel: ObservableObject {
                 return $0.distance > $1.distance  // Active runners sorted by distance (furthest first)
             }
         }
-        print("[RaceResultsViewModel] Final leaderboard for raceId=\(raceId?.uuidString ?? "nil"): \(leaderboard.map { "\($0.name)-\($0.finishTime != nil ? "FINISHED" : "ACTIVE")"})")
+        // Reduced logging to prevent spam
         if leaderboard.isEmpty && !participants.isEmpty {
-            print("⚠️ Leaderboard was empty but there are participants! Adding all participants.")
             leaderboard = completeLeaderboard // fallback: publish everyone if sort failed somehow
         }
         
-        print("📊 Updated leaderboard with \(leaderboard.count) runners:")
-        for (index, runner) in leaderboard.enumerated() {
-            let status = runner.finishTime != nil ? "FINISHED" : "ACTIVE"
-            let timeOrDistance = runner.finishTime != nil ? 
-                "time: \(runner.finishTime!)" : "distance: \(runner.distance)m"
-            print("  \(index + 1). \(runner.name) (\(status)) - \(timeOrDistance)")
-        }
-        
-        // Debug: Check if sorting is working correctly
-        let finishedRunners = leaderboard.filter { $0.finishTime != nil }
-        let activeRunners = leaderboard.filter { $0.finishTime == nil }
-        print("📊 Breakdown: \(finishedRunners.count) finished, \(activeRunners.count) active")
+        let finishedCount = leaderboard.filter { $0.finishTime != nil }.count
+        let activeCount = leaderboard.filter { $0.finishTime == nil }.count
+        print("📊 Leaderboard updated: \(finishedCount) finished, \(activeCount) active (\(leaderboard.count) total)")
     }
     
     // Add a public method to refresh the leaderboard, so it can be called by the view after race finishes
     func refreshLeaderboard() async {
         await checkFinishTimes()
         await updateLeaderboard()
+    }
+    
+    /// Calculate and update LP after a ranked race completes
+    /// - Parameter currentUserPlace: The finishing position of the current user
+    func calculateLPChange(currentUserPlace: Int, totalRunnersOverride: Int? = nil) async {
+        guard isRankedRace,
+              let appEnvironment = appEnvironment,
+              let userId = appEnvironment.supabaseConnection.currentUserId else {
+            print("⚠️ Not a ranked race or missing user ID")
+            return
+        }
+        
+        do {
+            let inferredCount = max(lastParticipantCount, initialLeaderboard.count, leaderboard.count)
+            let totalRunners = totalRunnersOverride ?? inferredCount
+            
+            if totalRunners <= 1 {
+                print("⚠️ Skipping LP update — not enough runners (totalRunners = \(totalRunners))")
+                return
+            }
+            
+            // Update rank and get LP change result
+            let result = try await appEnvironment.supabaseConnection.updateRankAfterRace(
+                userId: userId,
+                place: currentUserPlace,
+                totalRunners: totalRunners
+            )
+            
+            self.lpChangeResult = result
+            self.showLPChange = true
+            
+            print("✅ LP Change: \(result.displayMessage)")
+        } catch {
+            print("❌ Error calculating LP change: \(error)")
+        }
+    }
+    
+    /// Get the current user's finishing place from the leaderboard
+    func getCurrentUserPlace(username: String) -> Int? {
+        // Find user in the finished leaderboard
+        let finishedRunners = leaderboard.filter { $0.finishTime != nil }
+        
+        if let index = finishedRunners.firstIndex(where: { $0.name == username }) {
+            return index + 1 // 1-based ranking
+        }
+        
+        return nil
     }
     
     deinit {

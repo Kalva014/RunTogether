@@ -47,21 +47,17 @@ class RaceScene: BaseRunningScene {
                 ))
             }
         } else {
-            // Add realtime opponents (include stale ones if they might have finished)
-            for (userId, opponent) in realtimeOpponents {
-                // Include all opponents, but mark stale ones with special handling
+            // Add realtime opponents - include all during active race
+            for (_, opponent) in realtimeOpponents {
                 let isFinished = opponent.distance >= Double(raceDistance)
-                let shouldInclude = !opponent.isStale || isFinished
                 
-                if shouldInclude {
-                    currRunners.append(RunnerData(
-                        name: opponent.username,
-                        distance: CGFloat(opponent.distance),
-                        pace: opponent.paceString(),
-                        finishTime: isFinished ? 0 : nil, // Mark finished runners
-                        speed: opponent.speedMps
-                    ))
-                }
+                currRunners.append(RunnerData(
+                    name: opponent.username,
+                    distance: CGFloat(opponent.distance),
+                    pace: opponent.paceString(),
+                    finishTime: isFinished ? 0 : nil, // Mark finished runners
+                    speed: opponent.speedMps
+                ))
             }
         }
 

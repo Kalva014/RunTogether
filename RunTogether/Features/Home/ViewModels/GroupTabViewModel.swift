@@ -57,9 +57,14 @@ class GroupTabViewModel: ObservableObject {
             errorMessage = nil
             print("✅ Total clubs loaded: \(runClubs.count)")
         } catch {
-            print("❌ Error in fetchRunClubs: \(error)")
-            errorMessage = "Failed to fetch run clubs: \(error.localizedDescription)"
-            throw error
+            if error.isCancelledRequest {
+                print("⚠️ fetchRunClubs request cancelled")
+                errorMessage = nil
+            } else {
+                print("❌ Error in fetchRunClubs: \(error)")
+                errorMessage = "Failed to fetch run clubs: \(error.localizedDescription)"
+                throw error
+            }
         }
     }
     
@@ -72,9 +77,14 @@ class GroupTabViewModel: ObservableObject {
             errorMessage = nil
             print("✅ Fetched all clubs: \(runClubs.count)")
         } catch {
-            print("❌ Error fetching all clubs: \(error)")
-            errorMessage = "Failed to fetch clubs: \(error.localizedDescription)"
-            throw error
+            if error.isCancelledRequest {
+                print("⚠️ fetchAllRunClubs request cancelled")
+                errorMessage = nil
+            } else {
+                print("❌ Error fetching all clubs: \(error)")
+                errorMessage = "Failed to fetch clubs: \(error.localizedDescription)"
+                throw error
+            }
         }
     }
     

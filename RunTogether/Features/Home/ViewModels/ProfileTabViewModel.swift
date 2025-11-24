@@ -12,6 +12,7 @@ import SwiftUI
 @MainActor
 class ProfileTabViewModel: ObservableObject {
 @Published var myStats: GlobalLeaderboardEntry?
+@Published var myRankedProfile: RankedProfile?
 @Published var isLoadingStats = false
 @Published var username: String = ""
 @Published var firstName: String = ""
@@ -27,6 +28,7 @@ class ProfileTabViewModel: ObservableObject {
         isLoadingStats = true
         do {
             myStats = try await appEnvironment.supabaseConnection.fetchMyLeaderboardStats()
+            myRankedProfile = try await appEnvironment.supabaseConnection.getRankedProfile()
         } catch {
             // Only log non-cancellation errors
             if (error as NSError).code != NSURLErrorCancelled {

@@ -64,6 +64,12 @@ struct ProfileTabView: View {
                 ScrollView {
                     VStack(spacing: 24) {
                         profileHeader
+                        
+                        // Ranked Status Section
+                        if let rankedProfile = viewModel.myRankedProfile {
+                            rankedStatusSection(profile: rankedProfile)
+                        }
+                        
                         statsSection
                         profileDetails
                         actionButtons
@@ -100,6 +106,183 @@ struct ProfileTabView: View {
             // Request permission on first appearance
             requestPhotoLibraryPermission()
         }
+    }
+    
+    private func rankedStatusSection(profile: RankedProfile) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "trophy.fill")
+                    .font(.title3)
+                    .foregroundColor(.orange)
+                
+                Text("Ranked Status")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                Spacer()
+            }
+            
+            VStack(spacing: 12) {
+                // Current Rank Display
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Current Rank")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        
+                        Text(profile.displayString)
+                            .font(.title2)
+                            .bold()
+                            .foregroundColor(.orange)
+                    }
+                    
+                    Spacer()
+                    
+                    // Rank Icon
+                    Text(rankEmoji(for: profile.tier))
+                        .font(.system(size: 50))
+                }
+                
+                // LP Progress Bar
+                if profile.tier != .champion {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Progress to \(nextDivisionName(current: profile))")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                            
+                            Spacer()
+                            
+                            Text("\(profile.league_points)/100 LP")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                        }
+                        
+                        GeometryReader { geometry in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color.white.opacity(0.1))
+                                    .frame(height: 8)
+                                
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [Color.orange, Color.orange.opacity(0.7)],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .frame(
+                                        width: geometry.size.width * CGFloat(min(profile.league_points, 100)) / 100.0,
+                                        height: 8
+                                    )
+                            }
+                        }
+                        .frame(height: 8)
+                    }
+                }
+                
+                // Top 3 Record
+                HStack(spacing: 20) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Top 3")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        HStack(spacing: 4) {
+                            Image(systemName: "trophy.fill")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                            Text("\(profile.top_3_finishes ?? 0)")
+                                .font(.headline)
+                                .foregroundColor(.orange)
+                        }
+                    }
+                    
+                    Divider()
+                        .background(Color.white.opacity(0.2))
+                        .frame(height: 30)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Total Races")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        Text("\(profile.total_races ?? 0)")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                    }
+                    
+                    Spacer()
+                    
+                    if (profile.total_races ?? 0) > 0 {
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text("Top 3 Rate")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                            Text(String(format: "%.0f%%", top3Rate(profile: profile)))
+                                .font(.headline)
+                                .foregroundColor(.green)
+                        }
+                    } else {
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text("Top 3 Rate")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                            Text("0%")
+                                .font(.headline)
+                                .foregroundColor(.gray)
+                        }
+                    }
+                }
+            }
+            .padding(16)
+            .background(
+                LinearGradient(
+                    colors: [Color.orange.opacity(0.2), Color.orange.opacity(0.1)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+            )
+        }
+    }
+    
+    private func rankEmoji(for tier: RankTier) -> String {
+        switch tier {
+        case .bronze: return "🥉"
+        case .silver: return "🥈"
+        case .gold: return "🥇"
+        case .platinum: return "💠"
+        case .diamond: return "💎"
+        case .champion: return "👑"
+        }
+    }
+    
+    private func nextDivisionName(current: RankedProfile) -> String {
+        guard current.tier != .champion else { return "Champion" }
+        
+        if let division = current.division {
+            if division == .i {
+                // Next tier
+                let nextTier = RankTier.from(numericValue: current.tier.numericValue + 1)
+                return "\(nextTier.rawValue) IV"
+            } else {
+                // Next division in same tier
+                let nextDiv = RankDivision(rawValue: division.rawValue - 1)
+                return "\(current.tier.rawValue) \(nextDiv?.displayName ?? "I")"
+            }
+        }
+        return "Next Rank"
+    }
+    
+    private func top3Rate(profile: RankedProfile) -> Double {
+        let top3 = Double(profile.top_3_finishes ?? 0)
+        let total = Double(profile.total_races ?? 0)
+        guard total > 0 else { return 0 }
+        return (top3 / total) * 100
     }
     
     private var profileHeader: some View {

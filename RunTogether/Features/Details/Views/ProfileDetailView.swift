@@ -15,6 +15,7 @@ struct ProfileDetailView: View {
     
     @State private var profile: Profile?
     @State private var stats: GlobalLeaderboardEntry?
+    @State private var rankedProfile: RankedProfile?
     @State private var runClubs: [String] = []
     @State private var isLoading = true
     @State private var showError = false
@@ -33,6 +34,11 @@ struct ProfileDetailView: View {
                     VStack(spacing: 24) {
                         profileHeader(profile: profile)
                         friendActionButton
+                        
+                        // Ranked Status Section
+                        if let rankedProfile = rankedProfile {
+                            rankedStatusSection(profile: rankedProfile)
+                        }
                         
                         if let stats = stats {
                             statsSection(stats: stats)
@@ -100,6 +106,118 @@ struct ProfileDetailView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
+    }
+    
+    // MARK: - Ranked Status Section
+    private func rankedStatusSection(profile: RankedProfile) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "trophy.fill")
+                    .font(.title3)
+                    .foregroundColor(.orange)
+                
+                Text("Ranked Status")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                Spacer()
+            }
+            
+            VStack(spacing: 12) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Current Rank")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        
+                        HStack(spacing: 8) {
+                            Text(rankEmoji(for: profile.tier))
+                                .font(.title)
+                            
+                            Text(profile.displayString)
+                                .font(.title3)
+                                .bold()
+                                .foregroundColor(.orange)
+                        }
+                    }
+                    
+                    Spacer()
+                }
+                
+                Divider().background(Color.white.opacity(0.2))
+                
+                HStack(spacing: 20) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Top 3")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        HStack(spacing: 4) {
+                            Image(systemName: "trophy.fill")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                            Text("\(profile.top_3_finishes ?? 0)")
+                                .font(.headline)
+                                .foregroundColor(.orange)
+                        }
+                    }
+                    
+                    Divider()
+                        .background(Color.white.opacity(0.2))
+                        .frame(height: 30)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Total Races")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        Text("\(profile.total_races ?? 0)")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                    }
+                    
+                    Spacer()
+                    
+                    if (profile.total_races ?? 0) > 0 {
+                        VStack(alignment: .trailing, spacing: 4) {
+                            Text("Top 3 Rate")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                            
+                            let top3 = Double(profile.top_3_finishes ?? 0)
+                            let total = Double(profile.total_races ?? 0)
+                            let top3Rate = (top3 / total) * 100
+                            
+                            Text(String(format: "%.0f%%", top3Rate))
+                                .font(.headline)
+                                .foregroundColor(.green)
+                        }
+                    }
+                }
+            }
+            .padding(16)
+            .background(
+                LinearGradient(
+                    colors: [Color.orange.opacity(0.2), Color.orange.opacity(0.1)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .cornerRadius(16)
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+            )
+        }
+    }
+    
+    private func rankEmoji(for tier: RankTier) -> String {
+        switch tier {
+        case .bronze: return "🥉"
+        case .silver: return "🥈"
+        case .gold: return "🥇"
+        case .platinum: return "💠"
+        case .diamond: return "💎"
+        case .champion: return "👑"
+        }
     }
     
     // MARK: - Friend Action Button
@@ -294,13 +412,10 @@ struct ProfileDetailView: View {
             return
         }
         
-        async let statsTask = viewModel.getStats(appEnvironment: appEnvironment, username: username)
-        async let clubsTask = viewModel.getPersonalRunClubs(appEnvironment: appEnvironment, username: username)
-        async let friendStatusTask = viewModel.refreshFriendStatus(appEnvironment: appEnvironment, username: username)
-        
-        stats = await statsTask
-        runClubs = await clubsTask
-        await friendStatusTask
+        stats = await viewModel.getStats(appEnvironment: appEnvironment, username: username)
+        rankedProfile = await viewModel.getRankedProfile(appEnvironment: appEnvironment)
+        runClubs = await viewModel.getPersonalRunClubs(appEnvironment: appEnvironment, username: username)
+        await viewModel.refreshFriendStatus(appEnvironment: appEnvironment, username: username)
         
         isLoading = false
     }

@@ -8,6 +8,7 @@
 // MARK: - RaceResultsView.swift - COMPLETE
 // ==========================================
 import SwiftUI
+import Foundation
 
 struct RaceResultsView: View {
     let initialLeaderboard: [RunnerData]
@@ -26,7 +27,7 @@ struct RaceResultsView: View {
     @StateObject private var chatViewModel: ChatViewModel
     @StateObject private var resultsViewModel: RaceResultsViewModel
     
-    init(leaderboard: [RunnerData], playerTime: TimeInterval?, distance: String, stats: RaceStats?, raceId: UUID?, onExitToHome: (() -> Void)? = nil) {
+    init(leaderboard: [RunnerData], playerTime: TimeInterval?, distance: String, stats: RaceStats?, raceId: UUID?, isRankedRace: Bool = false, onExitToHome: (() -> Void)? = nil) {
         self.initialLeaderboard = leaderboard
         self.playerTime = playerTime
         self.distance = distance
@@ -38,8 +39,190 @@ struct RaceResultsView: View {
         _resultsViewModel = StateObject(wrappedValue: RaceResultsViewModel(
             initialLeaderboard: leaderboard,
             raceId: raceId,
-            useMiles: stats?.useMiles ?? true
+            useMiles: stats?.useMiles ?? true,
+            isRankedRace: isRankedRace
         ))
+    }
+    
+    private var lpChangeHeader: some View {
+        HStack {
+            Image(systemName: "trophy.fill")
+                .font(.title2)
+                .foregroundColor(.orange)
+            
+            Text("Rank Update")
+                .font(.title3)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+            
+            Spacer()
+        }
+    }
+    
+    @ViewBuilder
+    private func lpChangeStatus(result: LPChangeResult) -> some View {
+        HStack {
+            Spacer()
+            
+            if result.promoted {
+                VStack(spacing: 8) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(.green)
+                        .symbolEffect(.bounce, value: result.promoted)
+                    
+                    Text("PROMOTED!")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.green)
+                }
+                .transition(.scale.combined(with: .opacity))
+            } else if result.demoted {
+                VStack(spacing: 8) {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(.red)
+                        .symbolEffect(.pulse, value: result.demoted)
+                    
+                    Text("DEMOTED")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.red)
+                }
+                .transition(.scale.combined(with: .opacity))
+            } else {
+                VStack(spacing: 8) {
+                    Text(result.lpChange > 0 ? "+\(result.lpChange)" : "\(result.lpChange)")
+                        .font(.system(size: 48, weight: .bold))
+                        .foregroundColor(result.lpChange > 0 ? .green : result.lpChange < 0 ? .red : .gray)
+                        .contentTransition(.numericText(value: Double(result.lpChange)))
+                    
+                    Text("LP")
+                        .font(.title3)
+                        .foregroundColor(.gray)
+                }
+                .transition(.scale.combined(with: .opacity))
+            }
+            
+            Spacer()
+        }
+    }
+    
+    private func lpProgressSection(result: LPChangeResult) -> some View {
+        LPProgressView(result: result)
+    }
+    
+    private func rankTransition(result: LPChangeResult) -> some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Previous")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                
+                Text(result.oldRank)
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+            }
+            
+            Image(systemName: result.promoted ? "arrow.up" : result.demoted ? "arrow.down" : "arrow.right")
+                .foregroundColor(result.promoted ? .green : result.demoted ? .red : .orange)
+            
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("Current")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                
+                Text(result.newRank)
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                    .foregroundColor(.orange)
+            }
+            
+            Spacer()
+        }
+    }
+    
+    private struct LPProgressView: View {
+        let result: LPChangeResult
+        @State private var displayedLP: Double = 0
+        @State private var progressLP: Double = 0
+        
+        var body: some View {
+            VStack(spacing: 8) {
+                HStack {
+                    Text("\(Int(displayedLP.rounded())) LP")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+                        .contentTransition(.numericText(value: displayedLP))
+                    
+                    Spacer()
+                    
+                    Text(progressLabel)
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.white.opacity(0.1))
+                            .frame(height: 12)
+                        
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(
+                                LinearGradient(
+                                    colors: [Color.orange, Color.orange.opacity(0.7)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                            )
+                            .frame(
+                                width: geometry.size.width * CGFloat(progressRatio),
+                                height: 12
+                            )
+                    }
+                }
+                .frame(height: 12)
+            }
+            .onAppear {
+                resetAndAnimate()
+            }
+            .onChange(of: result.newLP) { _ in
+                resetAndAnimate()
+            }
+        }
+        
+        private var progressLabel: String {
+            if result.tier == .champion {
+                return "Champion LP fuels leaderboard"
+            } else {
+                return "Next division at 100 LP"
+            }
+        }
+        
+        private var progressRatio: Double {
+            let clamped = max(0, min(100, progressLP))
+            return clamped / 100.0
+        }
+        
+        private func resetAndAnimate() {
+            let start = clamp(result.oldLP)
+            let end = clamp(result.newLP)
+            displayedLP = Double(start)
+            progressLP = Double(start)
+            
+            DispatchQueue.main.async {
+                withAnimation(.easeInOut(duration: 1.1)) {
+                    displayedLP = Double(end)
+                    progressLP = Double(end)
+                }
+            }
+        }
+        
+        private func clamp(_ value: Int) -> Int {
+            return max(0, min(100, value))
+        }
     }
     
     var body: some View {
@@ -61,6 +244,16 @@ struct RaceResultsView: View {
                         // Player stats card
                         if let stats = stats {
                             playerStatsCard(stats: stats)
+                        }
+                        
+                        // LP Change Display (for ranked races)
+                        if resultsViewModel.showLPChange, let lpResult = resultsViewModel.lpChangeResult {
+                            lpChangeCard(result: lpResult)
+                                .transition(.asymmetric(
+                                    insertion: .scale(scale: 0.8).combined(with: .opacity),
+                                    removal: .opacity
+                                ))
+                                .animation(.spring(response: 0.6, dampingFraction: 0.7), value: resultsViewModel.showLPChange)
                         }
                         
                         // Leaderboard
@@ -96,6 +289,15 @@ struct RaceResultsView: View {
                     await resultsViewModel.startRealtimeUpdates(appEnvironment: appEnvironment)
                     await resultsViewModel.refreshLeaderboard()
                     await chatViewModel.startChat(appEnvironment: appEnvironment)
+                    
+                    // Calculate LP change if this is a ranked race
+                    if let username = appEnvironment.appUser?.username,
+                       let place = resultsViewModel.getCurrentUserPlace(username: username) {
+                        await resultsViewModel.calculateLPChange(
+                            currentUserPlace: place,
+                            totalRunnersOverride: stats?.totalRunners
+                        )
+                    }
                 }
             }
         }
@@ -106,7 +308,7 @@ struct RaceResultsView: View {
                 chatViewModel.messages.removeAll() // Clean up chat messages so next race starts fresh
                 
                 // Clean up race state to allow joining new races
-                if let raceId = raceId {
+                if raceId != nil {
                     // Ensure we've left the race channel properly
                     await appEnvironment.supabaseConnection.unsubscribeFromRaceBroadcasts()
                 }
@@ -176,6 +378,46 @@ struct RaceResultsView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
+    }
+    
+    // MARK: - LP Change Card
+    private func lpChangeCard(result: LPChangeResult) -> some View {
+        VStack(spacing: 16) {
+            lpChangeHeader
+            
+            VStack(spacing: 12) {
+                lpChangeStatus(result: result)
+                lpProgressSection(result: result)
+                
+                Divider()
+                    .background(Color.white.opacity(0.2))
+                
+                rankTransition(result: result)
+            }
+            .padding(20)
+            .background(
+                LinearGradient(
+                    colors: result.promoted ? [Color.green.opacity(0.3), Color.green.opacity(0.1)] :
+                             result.demoted ? [Color.red.opacity(0.3), Color.red.opacity(0.1)] :
+                             [Color.orange.opacity(0.2), Color.orange.opacity(0.1)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .cornerRadius(16)
+        }
+        .padding(20)
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(20)
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(
+                    result.promoted ? Color.green.opacity(0.5) :
+                    result.demoted ? Color.red.opacity(0.5) :
+                    Color.orange.opacity(0.5),
+                    lineWidth: 2
+                )
+        )
     }
     
     // MARK: - Player Stats Card
@@ -287,6 +529,28 @@ struct RaceResultsView: View {
                 Text(runner.name)
                     .font(.headline)
                     .foregroundColor(runner.name == "You" ? .orange : .white)
+                
+                if let rank = runner.rankDisplay {
+                    HStack(spacing: 6) {
+                        if let emoji = runner.rankEmoji {
+                            Text(emoji)
+                        }
+                        
+                        Text(rank)
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                        
+                        if let lp = runner.leaguePoints {
+                            Text("\(lp) LP")
+                                .font(.caption2)
+                                .foregroundColor(.gray)
+                        }
+                    }
+                } else {
+                    Text("Unranked")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
                 
                 HStack(spacing: 12) {
                     // Time

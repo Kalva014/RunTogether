@@ -113,15 +113,15 @@ class RunningViewModel: ObservableObject {
         print("📢 Starting broadcast timer for race updates")
         
         broadcastTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            Task {
+            Task { @MainActor in
                 guard let self = self,
                       let raceId = self.raceId else {
                     print("⚠️ Cannot broadcast: missing self or raceId")
                     return
                 }
                 
-                let distance = Double(self.raceScene.playerDistance)
-                let paceString = self.playerPace
+                let distance = Double(await self.raceScene.playerDistance)
+                let paceString = await self.playerPace
                 
                 // Convert pace string (e.g. "5:42") to total minutes
                 let paceComponents = paceString.split(separator: ":").compactMap { Double($0) }
@@ -130,9 +130,9 @@ class RunningViewModel: ObservableObject {
                     : 0.0
                 
                 // Get current speed (important for treadmill mode)
-                let currentSpeed = self.isTreadmillMode ? 
-                    self.raceScene.currentPlayerSpeed : 
-                    (self.locationManager?.currentSpeed ?? 0.0)
+                let currentSpeed = await self.isTreadmillMode ? 
+                    await self.raceScene.currentPlayerSpeed : 
+                    (await self.locationManager?.currentSpeed ?? 0.0)
                 
 //                print("📤 Broadcasting update: distance=\(distance)m, pace=\(paceMinutes)min, speed=\(currentSpeed)m/s")
                 

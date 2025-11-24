@@ -592,7 +592,7 @@ class BaseRunningScene: SKScene, ObservableObject {
             }
         } else {
             // Add realtime opponents (include stale ones if they might have finished)
-            for (userId, opponent) in realtimeOpponents {
+            for (_, opponent) in realtimeOpponents {
                 // Include all opponents, but mark stale ones with special handling
                 let isFinished = opponent.distance >= Double(raceDistance) * 0.95 // Allow for small distance variations
                 let shouldInclude = !opponent.isStale || isFinished
@@ -649,7 +649,7 @@ class BaseRunningScene: SKScene, ObservableObject {
             return
         }
         
-        let stream = await channel.broadcastStream(event: "update")
+        let stream = channel.broadcastStream(event: "update")
         print("✅ Started listening to broadcast stream")
         
         for await message in stream {
@@ -686,10 +686,10 @@ class BaseRunningScene: SKScene, ObservableObject {
                 // Fetch username for new opponent
                 Task { @MainActor in
                     if let profile = try? await appEnvironment.supabaseConnection.getProfileById(userId: userId) {
-                        print("✅ Profile fetched for \(userId): \(profile.username ?? "Unknown")")
+                        print("✅ Profile fetched for \(userId): \(profile.username)")
                         realtimeOpponents[userId] = RealtimeOpponentData(
                             userId: userId,
-                            username: profile.username ?? "Unknown",
+                            username: profile.username,
                             distance: distance,
                             paceMinutes: pace,
                             speedMps: speedMps,

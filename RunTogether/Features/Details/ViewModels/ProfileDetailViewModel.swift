@@ -70,6 +70,20 @@ class ProfileDetailViewModel: ObservableObject {
         }
     }
     
+    func getRankedProfile(appEnvironment: AppEnvironment) async -> RankedProfile? {
+        guard let userId = userId else {
+            print("User ID not set")
+            return nil
+        }
+        
+        do {
+            return try await appEnvironment.supabaseConnection.getRankedProfile(userId: userId)
+        } catch {
+            print("Error getting ranked profile: \(error.localizedDescription)")
+            return nil
+        }
+    }
+    
     func refreshFriendStatus(appEnvironment: AppEnvironment, username: String) async {
         do {
             let friends = try await appEnvironment.supabaseConnection.listFriends()

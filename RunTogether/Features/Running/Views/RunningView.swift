@@ -28,6 +28,7 @@ struct RunningView: View {
     @State private var showLeaveConfirmation = false
     @State private var showChat = false
     @State private var showLeaderboard = false
+    @State private var isRankedRace = false
     @Environment(\.dismiss) private var dismiss
     
     init(mode: String, isTreadmillMode: Bool, distance: String, useMiles: Bool, raceId: UUID? = nil) {
@@ -125,12 +126,19 @@ struct RunningView: View {
             viewModel.setAppEnvironment(appEnvironment: appEnvironment)
             
             Task {
-                if appEnvironment.supabaseConnection != nil {
-                    await viewModel.startRealtime(appEnvironment: appEnvironment)
+                await viewModel.startRealtime(appEnvironment: appEnvironment)
                     
-                    if raceId != nil {
-                        await chatViewModel.startChat(appEnvironment: appEnvironment)
+                if raceId != nil {
+                    await chatViewModel.startChat(appEnvironment: appEnvironment)
+                    
+                    // Check if this is a ranked race
+                    if let raceDetails = try? await appEnvironment.supabaseConnection.getRaceDetails(raceId: raceId!) {
+                        isRankedRace = raceDetails.mode == "ranked"
+                        print("🏆 Race mode: \(raceDetails.mode) - isRanked: \(isRankedRace)")
                     }
+                } else {
+                    // For non-multiplayer races, check the mode parameter
+                    isRankedRace = mode == "ranked"
                 }
             }
         }
@@ -171,7 +179,8 @@ struct RunningView: View {
                         raceDistanceMeters: Double(viewModel.raceScene.raceDistance),
                         useMiles: useMiles
                     ),
-                    raceId: raceId
+                    raceId: raceId,
+                    isRankedRace: isRankedRace
                 )
                 .onAppear {
                     print("🏁 Navigating to results with player finish time: \(viewModel.raceScene.finishTimes[-1] ?? -1)")

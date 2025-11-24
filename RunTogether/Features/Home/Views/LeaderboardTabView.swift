@@ -13,19 +13,9 @@ import SwiftUI
 struct LeaderboardTabView: View {
     @EnvironmentObject var appEnvironment: AppEnvironment
     @StateObject var viewModel = LeaderboardTabViewModel()
-    @State private var searchText = ""
     
-    var filteredLeaderboard: [GlobalLeaderboardEntry] {
-        if searchText.isEmpty {
-            return viewModel.leaderboardEntries
-        } else {
-            return viewModel.leaderboardEntries.filter { entry in
-                let username = viewModel.username(for: entry.user_id).lowercased()
-                let displayName = viewModel.displayName(for: entry.user_id).lowercased()
-                let search = searchText.lowercased()
-                return username.contains(search) || displayName.contains(search)
-            }
-        }
+    var filteredRankedLeaderboard: [RankedLeaderboardEntry] {
+        return viewModel.rankedLeaderboardEntries
     }
     
     var body: some View {
@@ -36,16 +26,17 @@ struct LeaderboardTabView: View {
                 VStack(spacing: 0) {
                     header
                     
-                    // Search bar
-                    searchBar
-                    
                     ScrollView {
                         VStack(spacing: 20) {
-                            if let myStats = viewModel.myStats {
-                                myStatsCard(stats: myStats)
+                            // My Ranked Stats Card
+                            if let myRankedProfile = viewModel.myRankedProfile {
+                                myRankedStatsCard(profile: myRankedProfile)
                             }
                             
-                            leaderboardList
+                            rankDistributionCard
+                            
+                            // Ranked Leaderboard List
+                            rankedLeaderboardList
                         }
                         .padding(.horizontal, 20)
                         .padding(.bottom, 100)
@@ -67,79 +58,21 @@ struct LeaderboardTabView: View {
         }
     }
     
-    private var searchBar: some View {
-        HStack {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(.gray)
-            
-            TextField("Search users...", text: $searchText)
-                .textFieldStyle(PlainTextFieldStyle())
-                .foregroundColor(.white)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-            
-            if !searchText.isEmpty {
-                Button(action: {
-                    searchText = ""
-                }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.gray)
-                }
-            }
-        }
-        .padding(12)
-        .background(Color.white.opacity(0.1))
-        .cornerRadius(12)
-        .padding(.horizontal, 20)
-        .padding(.bottom, 12)
-    }
-    
-    private var leaderboardList: some View {
-        VStack(spacing: 12) {
-            ForEach(Array(filteredLeaderboard.enumerated()), id: \.element.user_id) { index, entry in
-                NavigationLink(destination: ProfileDetailView(username: viewModel.username(for: entry.user_id))) {
-                    leaderboardRow(
-                        entry: entry,
-                        rank: (viewModel.currentPage * viewModel.pageSize) + index + 1,
-                        isCurrentUser: entry.user_id == appEnvironment.supabaseConnection.currentUserId
-                    )
-                }
-                .buttonStyle(PlainButtonStyle())
-                
-                if index == filteredLeaderboard.count - 1 && viewModel.hasMorePages && searchText.isEmpty {
-                    ProgressView()
-                        .tint(.orange)
-                        .onAppear {
-                            Task {
-                                await viewModel.loadNextPage(appEnvironment: appEnvironment)
-                            }
-                        }
-                }
-            }
-            
-            if filteredLeaderboard.isEmpty && !searchText.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 50))
-                        .foregroundColor(.gray.opacity(0.5))
-                    Text("No users found")
-                        .font(.subheadline)
-                        .foregroundColor(.gray)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 60)
-            }
-        }
-    }
     
     // Keep all other methods the same...
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Leaderboard")
-                .font(.system(size: 48, weight: .bold))
-                .foregroundColor(.white)
+            HStack {
+                Image(systemName: "trophy.fill")
+                    .font(.system(size: 40))
+                    .foregroundColor(.orange)
+                
+                Text("Ranked")
+                    .font(.system(size: 48, weight: .bold))
+                    .foregroundColor(.white)
+            }
             
-            Text("Global Rankings")
+            Text("Competitive Standings")
                 .font(.headline)
                 .foregroundColor(.gray)
         }
@@ -149,42 +82,77 @@ struct LeaderboardTabView: View {
         .padding(.bottom, 20)
     }
     
-    private func leaderboardRow(entry: GlobalLeaderboardEntry, rank: Int, isCurrentUser: Bool) -> some View {
+    private var rankedLeaderboardList: some View {
+        VStack(spacing: 12) {
+            ForEach(Array(filteredRankedLeaderboard.enumerated()), id: \.element.user_id) { index, entry in
+                NavigationLink(destination: ProfileDetailView(username: viewModel.username(for: entry.user_id))) {
+                    rankedLeaderboardRow(
+                        entry: entry,
+                        position: index + 1,
+                        isCurrentUser: entry.user_id == appEnvironment.supabaseConnection.currentUserId
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            
+            if filteredRankedLeaderboard.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "trophy")
+                        .font(.system(size: 50))
+                        .foregroundColor(.gray.opacity(0.5))
+                    Text("No ranked players yet")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                    Text("Play a ranked race to appear here!")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 60)
+            }
+        }
+    }
+    
+    private func rankedLeaderboardRow(entry: RankedLeaderboardEntry, position: Int, isCurrentUser: Bool) -> some View {
         HStack(spacing: 16) {
+            // Position Badge
             ZStack {
                 Circle()
-                    .fill(rankColor(rank: rank))
+                    .fill(rankColor(rank: position))
                     .frame(width: 44, height: 44)
                 
-                if rank <= 3 {
-                    Image(systemName: rank == 1 ? "crown.fill" : "medal.fill")
+                if position <= 3 {
+                    Image(systemName: position == 1 ? "crown.fill" : "medal.fill")
                         .font(.system(size: 18))
                         .foregroundColor(.white)
                 } else {
-                    Text("\(rank)")
+                    Text("\(position)")
                         .font(.headline)
                         .foregroundColor(.white)
                 }
             }
             
+            // Profile Picture
             ProfilePictureView(
                 imageUrl: viewModel.profilePictureUrl(for: entry.user_id),
                 username: viewModel.username(for: entry.user_id),
                 size: 50
             )
             
+            // User Info
             VStack(alignment: .leading, spacing: 6) {
                 Text(viewModel.displayName(for: entry.user_id))
                     .font(.headline)
                     .foregroundColor(isCurrentUser ? .orange : .white)
                 
-                HStack(spacing: 12) {
-                    statBadge(icon: "flag.fill", value: "\(Int(entry.total_races_completed ?? 0))")
-                    statBadge(icon: "figure.run", value: String(format: "%.0f km", (entry.total_distance_covered ?? 0) / 1000))
+                // Rank Display
+                HStack(spacing: 8) {
+                    Text(rankEmoji(for: entry.tier))
+                        .font(.caption)
                     
-                    if let topThree = entry.top_three_finishes, topThree > 0 {
-                        statBadge(icon: "trophy.fill", value: "\(topThree)", color: .orange)
-                    }
+                    Text(entry.displayString)
+                        .font(.subheadline)
+                        .foregroundColor(.orange)
                 }
             }
             
@@ -203,26 +171,7 @@ struct LeaderboardTabView: View {
         )
     }
     
-    private func statBadge(icon: String, value: String, color: Color = .gray) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.caption2)
-            Text(value)
-                .font(.caption)
-        }
-        .foregroundColor(color)
-    }
-    
-    private func rankColor(rank: Int) -> Color {
-        switch rank {
-        case 1: return Color(red: 1.0, green: 0.84, blue: 0.0)
-        case 2: return Color(red: 0.75, green: 0.75, blue: 0.75)
-        case 3: return Color(red: 0.8, green: 0.5, blue: 0.2)
-        default: return Color.white.opacity(0.2)
-        }
-    }
-    
-    private func myStatsCard(stats: GlobalLeaderboardEntry) -> some View {
+    private func myRankedStatsCard(profile: RankedProfile) -> some View {
         VStack(spacing: 16) {
             HStack {
                 ProfilePictureView(
@@ -237,14 +186,21 @@ struct LeaderboardTabView: View {
                         .fontWeight(.bold)
                         .foregroundColor(.white)
                     
-                    if let rank = viewModel.myRank {
+                    HStack(spacing: 8) {
+                        Text(rankEmoji(for: profile.tier))
+                        Text(profile.displayString)
+                            .font(.subheadline)
+                            .foregroundColor(.orange)
+                    }
+                    
+                    if let position = viewModel.myRankedPosition {
                         HStack(spacing: 4) {
-                            Image(systemName: "trophy.fill")
+                            Image(systemName: "number")
+                                .font(.caption2)
+                                .foregroundColor(.gray)
+                            Text("Position #\(position)")
                                 .font(.caption)
-                                .foregroundColor(.orange)
-                            Text("Rank #\(rank)")
-                                .font(.subheadline)
-                                .foregroundColor(.orange)
+                                .foregroundColor(.gray)
                         }
                     }
                 }
@@ -255,11 +211,18 @@ struct LeaderboardTabView: View {
             Divider().background(Color.white.opacity(0.2))
             
             HStack(spacing: 0) {
-                statItem(value: "\(Int(stats.total_races_completed ?? 0))", label: "Races")
+                statItem(value: "\(profile.top_3_finishes ?? 0)", label: "Top 3")
                 Divider().background(Color.white.opacity(0.2)).frame(height: 40)
-                statItem(value: String(format: "%.1f", (stats.total_distance_covered ?? 0) / 1000), label: "Total km")
+                statItem(value: "\(profile.total_races ?? 0)", label: "Races")
                 Divider().background(Color.white.opacity(0.2)).frame(height: 40)
-                statItem(value: "\(stats.top_three_finishes ?? 0)", label: "Top 3")
+                if (profile.total_races ?? 0) > 0 {
+                    let top3 = Double(profile.top_3_finishes ?? 0)
+                    let total = Double(profile.total_races ?? 0)
+                    let top3Rate = (top3 / total) * 100
+                    statItem(value: String(format: "%.0f%%", top3Rate), label: "Top 3 Rate")
+                } else {
+                    statItem(value: "0%", label: "Top 3 Rate")
+                }
             }
         }
         .padding(20)
@@ -273,6 +236,108 @@ struct LeaderboardTabView: View {
         .cornerRadius(16)
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.orange.opacity(0.5), lineWidth: 1))
     }
+    
+    private func rankEmoji(for tier: RankTier) -> String {
+        switch tier {
+        case .bronze: return "🥉"
+        case .silver: return "🥈"
+        case .gold: return "🥇"
+        case .platinum: return "💠"
+        case .diamond: return "💎"
+        case .champion: return "👑"
+        }
+    }
+    
+    
+    private func rankColor(rank: Int) -> Color {
+        switch rank {
+        case 1: return Color(red: 1.0, green: 0.84, blue: 0.0)
+        case 2: return Color(red: 0.75, green: 0.75, blue: 0.75)
+        case 3: return Color(red: 0.8, green: 0.5, blue: 0.2)
+        default: return Color.white.opacity(0.2)
+        }
+    }
+    
+    private var rankDistributionCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Rank Breakdown")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                    Text("Share of players in each tier")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                }
+                
+                Spacer()
+                
+                Text("\(viewModel.totalRankedPlayers) players")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            }
+            
+            VStack(spacing: 12) {
+                ForEach(viewModel.rankDistributionSlices) { slice in
+                    rankDistributionRow(slice)
+                }
+            }
+        }
+        .padding(20)
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(16)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+    
+    private func rankDistributionRow(_ slice: LeaderboardTabViewModel.RankDistributionSlice) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(slice.tier.emoji)
+                Text(slice.tier.rawValue)
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+                
+                Spacer()
+                
+                Text(String(format: "%.0f%%", slice.percentage))
+                    .font(.footnote)
+                    .foregroundColor(.gray)
+            }
+            
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.08))
+                        .frame(height: 10)
+                    
+                    Capsule()
+                        .fill(tierColor(for: slice.tier))
+                        .frame(width: geometry.size.width * CGFloat(min(slice.percentage, 100) / 100.0),
+                               height: 10)
+                }
+            }
+            .frame(height: 10)
+            
+            Text(slice.tier.descriptor)
+                .font(.caption2)
+                .foregroundColor(.gray)
+        }
+    }
+    
+    private func tierColor(for tier: RankTier) -> Color {
+        switch tier {
+        case .bronze: return Color(red: 156/255, green: 120/255, blue: 72/255)
+        case .silver: return Color(red: 192/255, green: 192/255, blue: 192/255)
+        case .gold: return Color(red: 255/255, green: 215/255, blue: 0/255)
+        case .platinum: return Color(red: 142/255, green: 202/255, blue: 230/255)
+        case .diamond: return Color(red: 135/255, green: 206/255, blue: 250/255)
+        case .champion: return Color(red: 255/255, green: 99/255, blue: 71/255)
+        }
+    }
+    
     
     private func statItem(value: String, label: String) -> some View {
         VStack(spacing: 4) {
