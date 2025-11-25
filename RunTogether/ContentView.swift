@@ -5,22 +5,36 @@
 //  Created by Kenneth Alvarez on 7/31/25.
 //
 
-// ==========================================
-// MARK: - ContentView.swift
-// ==========================================
 import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var appEnvironment: AppEnvironment
+    @State private var showOnboarding = false
     
     var body: some View {
         Group {
             if appEnvironment.appUser != nil {
                 // User is logged in → go directly to HomeView
                 HomeView()
+                    .onAppear {
+                        checkOnboardingStatus()
+                    }
             } else {
                 // User NOT logged in → show welcome screen
                 welcomeScreen
+            }
+        }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView(isPresented: $showOnboarding)
+        }
+    }
+    
+    private func checkOnboardingStatus() {
+        // Check if this is the user's first time
+        if !OnboardingManager.shared.hasSeenOnboarding {
+            // Small delay for smoother transition
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                showOnboarding = true
             }
         }
     }
@@ -83,6 +97,7 @@ extension ContentView {
         }
     }
 }
+
 #Preview {
     let supabaseConnection = SupabaseConnection()
     return ContentView()

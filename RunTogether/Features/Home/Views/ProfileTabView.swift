@@ -7,6 +7,7 @@
 // ==========================================
 // MARK: - ProfileTabView.swift - WITH PHOTO PERMISSIONS
 // ==========================================
+
 import SwiftUI
 import PhotosUI
 
@@ -15,6 +16,7 @@ struct ProfileTabView: View {
     @StateObject var viewModel: ProfileTabViewModel
     @State private var isEditing = false
     @State private var isSignedOut = false
+    @State private var showOnboarding = false  // NEW: Add this state
     
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var selectedImage: UIImage? = nil
@@ -61,22 +63,27 @@ struct ProfileTabView: View {
             ZStack {
                 Color.black.ignoresSafeArea()
                 
-                ScrollView {
-                    VStack(spacing: 24) {
-                        profileHeader
-                        
-                        // Ranked Status Section
-                        if let rankedProfile = viewModel.myRankedProfile {
-                            rankedStatusSection(profile: rankedProfile)
+                VStack(spacing: 0) {
+                    // NEW: Custom header with tutorial button
+                    customHeader
+                    
+                    ScrollView {
+                        VStack(spacing: 24) {
+                            profileHeader
+                            
+                            // Ranked Status Section
+                            if let rankedProfile = viewModel.myRankedProfile {
+                                rankedStatusSection(profile: rankedProfile)
+                            }
+                            
+                            statsSection
+                            profileDetails
+                            actionButtons
                         }
-                        
-                        statsSection
-                        profileDetails
-                        actionButtons
+                        .padding(.horizontal, 20)
+                        .padding(.top, 20)
+                        .padding(.bottom, 100)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
-                    .padding(.bottom, 100)
                 }
             }
             .navigationBarHidden(true)
@@ -97,15 +104,40 @@ struct ProfileTabView: View {
             } message: {
                 Text("Please enable photo library access in Settings to change your profile picture.")
             }
+            .fullScreenCover(isPresented: $showOnboarding) {
+                OnboardingView(isPresented: $showOnboarding)
+            }
         }
         .onAppear {
             Task {
                 await viewModel.loadProfile(appEnvironment: appEnvironment)
                 await viewModel.loadStats(appEnvironment: appEnvironment)
             }
-            // Request permission on first appearance
             requestPhotoLibraryPermission()
         }
+    }
+    
+    // NEW: Custom header with tutorial button
+    private var customHeader: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Profile")
+                    .font(.system(size: 48, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            
+            Spacer()
+            
+            // Tutorial button in top right
+            Button(action: { showOnboarding = true }) {
+                Image(systemName: "questionmark.circle.fill")
+                    .font(.system(size: 32))
+                    .foregroundColor(.orange)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 60)
+        .padding(.bottom, 10)
     }
     
     private func rankedStatusSection(profile: RankedProfile) -> some View {
@@ -316,11 +348,9 @@ struct ProfileTabView: View {
                     }
                     .onChange(of: selectedItem) { oldValue, newValue in
                         Task {
-                            // Check permission before loading photo
                             let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
                             
                             guard status == .authorized || status == .limited else {
-                                // Request permission if not granted
                                 PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
                                     if newStatus == .authorized || newStatus == .limited {
                                         Task {
@@ -336,7 +366,6 @@ struct ProfileTabView: View {
                                 return
                             }
                             
-                            // Permission already granted, load photo
                             await loadSelectedPhoto(from: newValue)
                         }
                     }
@@ -385,7 +414,7 @@ struct ProfileTabView: View {
     private var statsSection: some View {
         HStack(spacing: 20) {
             statItem(
-                value: viewModel.isLoadingStats ? "..." : "\(Int(viewModel.myStats?.total_races_completed ?? 0))", 
+                value: viewModel.isLoadingStats ? "..." : "\(Int(viewModel.myStats?.total_races_completed ?? 0))",
                 label: "Runs"
             )
             
@@ -394,7 +423,7 @@ struct ProfileTabView: View {
                 .frame(height: 40)
             
             statItem(
-                value: viewModel.isLoadingStats ? "..." : String(format: "%.1f km", (viewModel.myStats?.total_distance_covered ?? 0) / 1000), 
+                value: viewModel.isLoadingStats ? "..." : String(format: "%.1f km", (viewModel.myStats?.total_distance_covered ?? 0) / 1000),
                 label: "Distance"
             )
             
@@ -403,7 +432,7 @@ struct ProfileTabView: View {
                 .frame(height: 40)
             
             statItem(
-                value: viewModel.isLoadingStats ? "..." : "\(viewModel.myStats?.top_three_finishes ?? 0)", 
+                value: viewModel.isLoadingStats ? "..." : "\(viewModel.myStats?.top_three_finishes ?? 0)",
                 label: "Top 3"
             )
         }
