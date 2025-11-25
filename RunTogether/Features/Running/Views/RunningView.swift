@@ -132,13 +132,20 @@ struct RunningView: View {
                     await chatViewModel.startChat(appEnvironment: appEnvironment)
                     
                     // Check if this is a ranked race
-                    if let raceDetails = try? await appEnvironment.supabaseConnection.getRaceDetails(raceId: raceId!) {
+                    do {
+                        let raceDetails = try await appEnvironment.supabaseConnection.getRaceDetails(raceId: raceId!)
                         isRankedRace = raceDetails.mode == "ranked"
-                        print("🏆 Race mode: \(raceDetails.mode) - isRanked: \(isRankedRace)")
+                        print("🏆 Race mode from DB: '\(raceDetails.mode)' - isRanked: \(isRankedRace)")
+                    } catch {
+                        print("⚠️ Error fetching race details: \(error)")
+                        // Fallback to mode parameter
+                        isRankedRace = mode == "ranked" || mode == "Race"
+                        print("🏆 Fallback: mode='\(mode)' - isRanked: \(isRankedRace)")
                     }
                 } else {
                     // For non-multiplayer races, check the mode parameter
-                    isRankedRace = mode == "ranked"
+                    isRankedRace = mode == "ranked" || mode == "Race"
+                    print("🏆 No raceId, using mode='\(mode)' - isRanked: \(isRankedRace)")
                 }
             }
         }
@@ -184,6 +191,7 @@ struct RunningView: View {
                 )
                 .onAppear {
                     print("🏁 Navigating to results with player finish time: \(viewModel.raceScene.finishTimes[-1] ?? -1)")
+                    print("🏁 isRankedRace: \(isRankedRace)")
                     print("🏁 Current leaderboard:")
                     for (index, runner) in viewModel.leaderboard.enumerated() {
                         let status = runner.finishTime != nil ? "FINISHED(\(runner.finishTime!))" : "ACTIVE"

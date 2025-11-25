@@ -25,7 +25,7 @@ class RaceResultsViewModel: ObservableObject {
     private var useMiles: Bool
     private var cachedRaceStartTime: Date? // Cache race start time to avoid repeated fetches
     private var cachedRaceDetails: Race? // Cache full race details (distance, etc.)
-    private var isRankedRace: Bool = false // Track if this is a ranked race
+    var isRankedRace: Bool = false // Track if this is a ranked race (made public for debugging)
     
     init(initialLeaderboard: [RunnerData], raceId: UUID?, useMiles: Bool, isRankedRace: Bool = false) {
         self.initialLeaderboard = initialLeaderboard
@@ -457,10 +457,20 @@ class RaceResultsViewModel: ObservableObject {
     /// Calculate and update LP after a ranked race completes
     /// - Parameter currentUserPlace: The finishing position of the current user
     func calculateLPChange(currentUserPlace: Int, totalRunnersOverride: Int? = nil) async {
-        guard isRankedRace,
-              let appEnvironment = appEnvironment,
-              let userId = appEnvironment.supabaseConnection.currentUserId else {
-            print("⚠️ Not a ranked race or missing user ID")
+        print("🏆 calculateLPChange called - isRankedRace: \(isRankedRace), place: \(currentUserPlace)")
+        
+        guard isRankedRace else {
+            print("⚠️ Skipping LP update — not a ranked race (isRankedRace = false)")
+            return
+        }
+        
+        guard let appEnvironment = appEnvironment else {
+            print("⚠️ Skipping LP update — missing appEnvironment")
+            return
+        }
+        
+        guard let userId = appEnvironment.supabaseConnection.currentUserId else {
+            print("⚠️ Skipping LP update — missing user ID")
             return
         }
         
@@ -468,10 +478,14 @@ class RaceResultsViewModel: ObservableObject {
             let inferredCount = max(lastParticipantCount, initialLeaderboard.count, leaderboard.count)
             let totalRunners = totalRunnersOverride ?? inferredCount
             
+            print("🏆 Total runners: \(totalRunners) (override: \(totalRunnersOverride?.description ?? "nil"), inferred: \(inferredCount))")
+            
             if totalRunners <= 1 {
                 print("⚠️ Skipping LP update — not enough runners (totalRunners = \(totalRunners))")
                 return
             }
+            
+            print("🏆 Calling updateRankAfterRace for user \(userId), place: \(currentUserPlace), totalRunners: \(totalRunners)")
             
             // Update rank and get LP change result
             let result = try await appEnvironment.supabaseConnection.updateRankAfterRace(
@@ -484,8 +498,14 @@ class RaceResultsViewModel: ObservableObject {
             self.showLPChange = true
             
             print("✅ LP Change: \(result.displayMessage)")
+            print("✅ LP updated: \(result.oldLP) → \(result.newLP) (change: \(result.lpChange > 0 ? "+" : "")\(result.lpChange))")
         } catch {
             print("❌ Error calculating LP change: \(error)")
+            print("❌ Error details: \(error.localizedDescription)")
+            if let nsError = error as NSError? {
+                print("❌ Error domain: \(nsError.domain), code: \(nsError.code)")
+                print("❌ Error userInfo: \(nsError.userInfo)")
+            }
         }
     }
     

@@ -1296,17 +1296,25 @@ class SupabaseConnection: ObservableObject {
                 .value ?? []
             
             if let profile = profiles.first {
+                print("✅ Found ranked profile for user \(userId): \(profile.displayString)")
                 return profile
             } else {
                 // Create new ranked profile if doesn't exist
-                return try await createRankedProfile(userId: userId)
+                print("ℹ️ No ranked profile found for user \(userId), creating new one...")
+                let newProfile = try await createRankedProfile(userId: userId)
+                print("✅ Created ranked profile for user \(userId): \(newProfile.displayString)")
+                return newProfile
             }
         } catch {
             if error.isCancelledRequest {
                 print("⚠️ getRankedProfile(\(userId)) cancelled")
                 return nil
             } else {
-                print("Error fetching ranked profile for user \(userId): \(error)")
+                print("❌ Error fetching/creating ranked profile for user \(userId): \(error)")
+                if let nsError = error as NSError? {
+                    print("❌ Error domain: \(nsError.domain), code: \(nsError.code)")
+                    print("❌ Error message: \(nsError.localizedDescription)")
+                }
                 throw error
             }
         }
@@ -1364,10 +1372,18 @@ class SupabaseConnection: ObservableObject {
     /// - Returns: LPChangeResult showing the rank change details
     func updateRankAfterRace(userId: UUID, place: Int, totalRunners: Int) async throws -> LPChangeResult {
         do {
-            // Get current ranked profile
-            guard let profile = try await getRankedProfile(userId: userId) else {
-                throw NSError(domain: "SupabaseConnection", code: 404,
-                              userInfo: [NSLocalizedDescriptionKey: "Ranked profile not found"])
+            print("🏆 updateRankAfterRace called for user \(userId), place: \(place), totalRunners: \(totalRunners)")
+            
+            // Get current ranked profile (will create if doesn't exist)
+            var profile: RankedProfile
+            if let existingProfile = try await getRankedProfile(userId: userId) {
+                profile = existingProfile
+                print("🏆 Found existing ranked profile: \(profile.displayString)")
+            } else {
+                // Try to create profile if it doesn't exist
+                print("🏆 No ranked profile found, attempting to create one...")
+                profile = try await createRankedProfile(userId: userId)
+                print("🏆 Created new ranked profile: \(profile.displayString)")
             }
             
             let oldRank = profile.displayString

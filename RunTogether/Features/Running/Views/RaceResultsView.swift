@@ -291,12 +291,28 @@ struct RaceResultsView: View {
                     await chatViewModel.startChat(appEnvironment: appEnvironment)
                     
                     // Calculate LP change if this is a ranked race
-                    if let username = appEnvironment.appUser?.username,
-                       let place = resultsViewModel.getCurrentUserPlace(username: username) {
-                        await resultsViewModel.calculateLPChange(
-                            currentUserPlace: place,
-                            totalRunnersOverride: stats?.totalRunners
-                        )
+                    print("🏆 RaceResultsView onAppear - checking for LP calculation")
+                    print("🏆 isRankedRace: \(resultsViewModel.isRankedRace)")
+                    print("🏆 username: \(appEnvironment.appUser?.username ?? "nil")")
+                    
+                    if let username = appEnvironment.appUser?.username {
+                        if let place = resultsViewModel.getCurrentUserPlace(username: username) {
+                            print("🏆 User place found: \(place)")
+                            await resultsViewModel.calculateLPChange(
+                                currentUserPlace: place,
+                                totalRunnersOverride: stats?.totalRunners
+                            )
+                        } else {
+                            print("⚠️ User place not found in leaderboard")
+                            // Try to find user by checking all finished runners
+                            let finishedRunners = resultsViewModel.leaderboard.filter { $0.finishTime != nil }
+                            print("🏆 Finished runners count: \(finishedRunners.count)")
+                            for (index, runner) in finishedRunners.enumerated() {
+                                print("  \(index + 1). \(runner.name)")
+                            }
+                        }
+                    } else {
+                        print("⚠️ No username found in appUser")
                     }
                 }
             }
