@@ -78,12 +78,19 @@ struct LogInView: View {
                 .padding(.bottom, 30)
                 
                 Button(action: {
+                    appEnvironment.soundManager.playTap()
                     Task {
-                        isLoggedIn = await viewModel.signIn(
+                        let success = await viewModel.signIn(
                             email: email,
                             password: password,
                             appEnvironment: appEnvironment
                         )
+                        if success {
+                            appEnvironment.soundManager.playSuccess()
+                        } else {
+                            appEnvironment.soundManager.playError()
+                        }
+                        isLoggedIn = success
                     }
                 }) {
                     Text("Log In")

@@ -83,8 +83,9 @@ struct SignUpView: View {
                     .padding(.bottom, 30)
                     
                     Button(action: {
+                        appEnvironment.soundManager.playTap()
                         Task {
-                            isSignedUp = await viewModel.signUp(
+                            let success = await viewModel.signUp(
                                 email: email,
                                 username: username,
                                 first_name: first_name,
@@ -92,6 +93,12 @@ struct SignUpView: View {
                                 password: password,
                                 appEnvironment: appEnvironment
                             )
+                            if success {
+                                appEnvironment.soundManager.playSuccess()
+                            } else {
+                                appEnvironment.soundManager.playError()
+                            }
+                            isSignedUp = success
                         }
                     }) {
                         Text("Sign Up")

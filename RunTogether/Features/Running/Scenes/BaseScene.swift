@@ -44,6 +44,8 @@ class BaseRunningScene: SKScene, ObservableObject {
     var otherRunnersNames: [String] = []
     var previousOpponentSpeeds: [CGFloat] = []
     var previousPlayerSpeedMultiplier: CGFloat = 0.0
+    var previousOpponentPositions: [CGFloat] = [] // Track previous positions for passing detection
+    var lastPassingSoundTime: TimeInterval = 0 // Throttle passing sounds
     
     // MARK: - Visual Elements
     var backgroundTexture: SKTexture!
@@ -98,6 +100,13 @@ class BaseRunningScene: SKScene, ObservableObject {
         setupFinishLine()
         
         startTime = CACurrentMediaTime()
+        
+        // Play race start sound
+        if let appEnvironment = appEnvironment {
+            Task { @MainActor in
+                appEnvironment.soundManager.playRaceStart()
+            }
+        }
     }
     
     // MARK: - Setup Methods
@@ -352,6 +361,11 @@ class BaseRunningScene: SKScene, ObservableObject {
     }
 
     private func updateOpponents(deltaTime: TimeInterval, currentTime: TimeInterval) {
+        // Initialize previous positions array if needed
+        if previousOpponentPositions.count != otherRunners.count {
+            previousOpponentPositions = otherRunnersCurrentDistances
+        }
+        
         for i in 0..<otherRunners.count {
             let runnerNode = otherRunners[i]
             let runnerSprite = runnerNode.childNode(withName: "runnerSprite")!
@@ -365,6 +379,21 @@ class BaseRunningScene: SKScene, ObservableObject {
 
             let runnerDistance = otherRunnersCurrentDistances[i]
             let delta = runnerDistance - playerDistance // gap compared to player
+            
+            // Detect passing: Check if player passed this opponent or got passed
+            let previousDelta = previousOpponentPositions[i] - playerDistance
+            // If the sign changed (was ahead, now behind or vice versa) and we're close
+            if abs(delta) < 10 && abs(previousDelta) < 10 && 
+               (delta > 0 && previousDelta <= 0 || delta < 0 && previousDelta >= 0) &&
+               currentTime - lastPassingSoundTime > 1.0 { // Throttle to once per second
+                // Play passing sound
+                if let appEnvironment = appEnvironment {
+                    Task { @MainActor in
+                        appEnvironment.soundManager.playRunnerPassing()
+                    }
+                }
+                lastPassingSoundTime = currentTime
+            }
 
             // 2. Hide runner if finished or outside of visible range
             runnerNode.isHidden = runnerDistance >= raceDistance || delta <= -50 || delta > 500
@@ -408,6 +437,9 @@ class BaseRunningScene: SKScene, ObservableObject {
                     previousOpponentSpeeds[i] = newSpeed
                 }
             }
+            
+            // Update previous position for next frame
+            previousOpponentPositions[i] = runnerDistance
 
             // 10. Record finish time if runner crosses finish line
             if runnerDistance >= raceDistance && finishTimes[i] == nil {
@@ -460,6 +492,13 @@ class BaseRunningScene: SKScene, ObservableObject {
         guard !isRaceOver else { return }
         print("🏁 Race finished! Setting isRaceOver = true")
         isRaceOver = true
+
+        // Play race finish sound
+        if let appEnvironment = appEnvironment {
+            Task { @MainActor in
+                appEnvironment.soundManager.playRaceFinish()
+            }
+        }
 
         // Stop the player's motion immediately
         playerDistance = raceDistance
@@ -790,6 +829,7 @@ class BaseRunningScene: SKScene, ObservableObject {
         otherRunnersCurrentDistances.removeAll()
         otherRunnersSpeeds.removeAll()
         previousOpponentSpeeds.removeAll()
+        previousOpponentPositions.removeAll()
         
         print("🧹 Cleared all visual runners and realtime state")
     }
@@ -808,6 +848,11 @@ class BaseRunningScene: SKScene, ObservableObject {
             previousOpponentSpeeds.append(0)
         }
         
+        // Initialize previous positions array if needed
+        if previousOpponentPositions.count != otherRunners.count {
+            previousOpponentPositions = otherRunnersCurrentDistances
+        }
+        
         // Then update visual positions (same as before)
         for i in 0..<otherRunners.count {
             let runnerNode = otherRunners[i]
@@ -815,6 +860,23 @@ class BaseRunningScene: SKScene, ObservableObject {
             
             let runnerDistance = otherRunnersCurrentDistances[i]
             let delta = runnerDistance - playerDistance
+            
+            // Detect passing: Check if player passed this opponent or got passed
+            if i < previousOpponentPositions.count {
+                let previousDelta = previousOpponentPositions[i] - playerDistance
+                // If the sign changed (was ahead, now behind or vice versa) and we're close
+                if abs(delta) < 10 && abs(previousDelta) < 10 && 
+                   (delta > 0 && previousDelta <= 0 || delta < 0 && previousDelta >= 0) &&
+                   currentTime - lastPassingSoundTime > 1.0 { // Throttle to once per second
+                    // Play passing sound
+                    if let appEnvironment = appEnvironment {
+                        Task { @MainActor in
+                            appEnvironment.soundManager.playRunnerPassing()
+                        }
+                    }
+                    lastPassingSoundTime = currentTime
+                }
+            }
             
             runnerNode.isHidden = runnerDistance >= raceDistance || delta <= -50 || delta > 500
             
@@ -855,6 +917,11 @@ class BaseRunningScene: SKScene, ObservableObject {
                         previousOpponentSpeeds[i] = newSpeed
                     }
                 }
+            }
+            
+            // Update previous position for next frame
+            if i < previousOpponentPositions.count {
+                previousOpponentPositions[i] = runnerDistance
             }
             
             if runnerDistance >= raceDistance && finishTimes[i] == nil {

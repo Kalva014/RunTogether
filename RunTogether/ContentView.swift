@@ -76,6 +76,9 @@ extension ContentView {
                                 .background(Color.orange)
                                 .cornerRadius(12)
                         }
+                        .simultaneousGesture(TapGesture().onEnded {
+                            appEnvironment.soundManager.playNavigation()
+                        })
                         
                         NavigationLink(destination: SignUpView()) {
                             Text("Sign Up")
@@ -86,6 +89,9 @@ extension ContentView {
                                 .background(Color.white.opacity(0.2))
                                 .cornerRadius(12)
                         }
+                        .simultaneousGesture(TapGesture().onEnded {
+                            appEnvironment.soundManager.playNavigation()
+                        })
                     }
                     .padding(.horizontal, 40)
                     

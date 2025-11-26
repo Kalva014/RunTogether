@@ -78,7 +78,8 @@ struct RunningView: View {
                 VStack {
                     Spacer()
                     
-                    Button(action: { 
+                    Button(action: {
+                        appEnvironment.soundManager.playNavigation()
                         print("🎯 Results button tapped - navigating to results")
                         print("🎯 Current navigateToResults value: \(navigateToResults)")
                         print("🎯 Race over status: \(viewModel.raceScene.isRaceOver)")
@@ -251,7 +252,10 @@ struct RunningView: View {
     private var topStatsBar: some View {
         HStack {
             // Menu button
-            Button(action: { showMenu.toggle() }) {
+            Button(action: {
+                appEnvironment.soundManager.playTap()
+                showMenu.toggle()
+            }) {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 24))
                     .foregroundColor(.white)
@@ -343,7 +347,10 @@ struct RunningView: View {
             Spacer()
             
             // Leaderboard toggle
-            Button(action: { showLeaderboard.toggle() }) {
+            Button(action: {
+                appEnvironment.soundManager.playTap()
+                showLeaderboard.toggle()
+            }) {
                 HStack {
                     Image(systemName: "list.number")
                     Text("Board")
@@ -358,7 +365,10 @@ struct RunningView: View {
             
             // Chat button
             if raceId != nil {
-                Button(action: { showChat.toggle() }) {
+                Button(action: {
+                    appEnvironment.soundManager.playTap()
+                    showChat.toggle()
+                }) {
                     HStack {
                         Image(systemName: "message.fill")
                         Text("Chat")

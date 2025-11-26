@@ -599,6 +599,7 @@ struct RunTabView: View {
         
         createdRaceId = result.raceId
         await viewModel.waitForRaceToStart(appEnvironment: appEnvironment, raceId: result.raceId.uuidString)
+        appEnvironment.soundManager.playRaceStart()
         navigateToRunning = true
     }
     
@@ -682,6 +683,7 @@ struct RunTabView: View {
         viewModel.isWaiting = true
         await viewModel.waitUntilStartTime(startTime: selectedTime)
         viewModel.isWaiting = false
+        appEnvironment.soundManager.playRaceStart()
         navigateToRunning = true
     }
 }

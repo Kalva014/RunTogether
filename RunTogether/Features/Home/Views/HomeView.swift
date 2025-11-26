@@ -55,6 +55,10 @@ struct HomeView: View {
     
     private func tabButton(icon: String, title: String, tag: Int) -> some View {
         Button(action: {
+            // Play sound only if switching to a different tab
+            if selectedTab != tag {
+                appEnvironment.soundManager.playTabSwitch()
+            }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 selectedTab = tag
             }

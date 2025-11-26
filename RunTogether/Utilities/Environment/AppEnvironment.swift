@@ -4,10 +4,12 @@ import SwiftUI
 class AppEnvironment: ObservableObject {
     @Published var appUser: AppUser?
     @Published var supabaseConnection: SupabaseConnection
+    let soundManager: SoundManager
 
     init(appUser: AppUser? = nil, supabaseConnection: SupabaseConnection) {
         self.appUser = appUser
         self.supabaseConnection = supabaseConnection
+        self.soundManager = SoundManager.shared
         
         // Check authentication state on initialization
         Task {
