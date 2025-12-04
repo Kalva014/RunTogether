@@ -18,7 +18,6 @@ struct SignUpView: View {
     @State private var first_name: String = ""
     @State private var last_name: String = ""
     @State private var password: String = ""
-    @State var isSignedUp: Bool = false
     
     init() {
         _viewModel = StateObject(wrappedValue: SignUpViewModel())
@@ -95,10 +94,10 @@ struct SignUpView: View {
                             )
                             if success {
                                 appEnvironment.soundManager.playSuccess()
+                                // ContentView will automatically handle onboarding and navigation
                             } else {
                                 appEnvironment.soundManager.playError()
                             }
-                            isSignedUp = success
                         }
                     }) {
                         Text("Sign Up")
@@ -115,11 +114,6 @@ struct SignUpView: View {
                     
                     Spacer(minLength: 40)
                 }
-            }
-            
-            .navigationDestination(isPresented: $isSignedUp) {
-                HomeView()
-                    .environmentObject(appEnvironment)
             }
         }
     }

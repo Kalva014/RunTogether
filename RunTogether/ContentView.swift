@@ -10,31 +10,53 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject var appEnvironment: AppEnvironment
     @State private var showOnboarding = false
+    @State private var onboardingCompleted = false
     
     var body: some View {
         Group {
-            if appEnvironment.appUser != nil {
-                // User is logged in → go directly to HomeView
-                HomeView()
-                    .onAppear {
-                        checkOnboardingStatus()
-                    }
+            if let user = appEnvironment.appUser {
+                // User is logged in
+                if OnboardingManager.shared.hasSeenOnboarding(for: user.id) || onboardingCompleted {
+                    // Onboarding complete → show HomeView
+                    HomeView()
+                        .onAppear {
+                            print("🏠 Showing HomeView - onboarding already completed for user: \(user.id)")
+                        }
+                } else {
+                    // First time user → show onboarding first
+                    Color.black.ignoresSafeArea()
+                        .onAppear {
+                            print("👋 New user detected - showing onboarding for user: \(user.id)")
+                            print("🔍 Current showOnboarding state: \(showOnboarding)")
+                            // Small delay for smoother transition
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                print("⏰ Setting showOnboarding to true")
+                                showOnboarding = true
+                                print("✅ showOnboarding is now: \(showOnboarding)")
+                            }
+                        }
+                }
             } else {
                 // User NOT logged in → show welcome screen
                 welcomeScreen
             }
         }
-        .fullScreenCover(isPresented: $showOnboarding) {
+        .id(appEnvironment.appUser?.id ?? "logged-out")
+        .fullScreenCover(isPresented: $showOnboarding, onDismiss: {
+            print("👋 Onboarding dismissed, setting onboardingCompleted to true")
+            onboardingCompleted = true
+        }) {
             OnboardingView(isPresented: $showOnboarding)
+                .onAppear {
+                    print("🎉 OnboardingView fullScreenCover appeared!")
+                }
         }
-    }
-    
-    private func checkOnboardingStatus() {
-        // Check if this is the user's first time
-        if !OnboardingManager.shared.hasSeenOnboarding {
-            // Small delay for smoother transition
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                showOnboarding = true
+        .onChange(of: appEnvironment.appUser) { newUser in
+            if let user = newUser {
+                print("🔄 AppUser changed to: \(user.email) (ID: \(user.id))")
+                print("📊 Onboarding status: \(OnboardingManager.shared.hasSeenOnboarding(for: user.id))")
+            } else {
+                print("🔄 AppUser cleared")
             }
         }
     }

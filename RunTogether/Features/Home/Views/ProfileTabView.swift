@@ -662,6 +662,22 @@ struct ProfileTabView: View {
                     .background(Color.red.opacity(0.8))
                     .cornerRadius(12)
             }
+            
+            // Debug button to reset onboarding
+            #if DEBUG
+            Button(action: {
+                OnboardingManager.shared.resetOnboarding(for: appEnvironment.appUser?.id)
+                showOnboarding = true
+            }) {
+                Text("🔄 Reset & Show Onboarding")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.white.opacity(0.1))
+                    .cornerRadius(8)
+            }
+            #endif
         }
     }
 }

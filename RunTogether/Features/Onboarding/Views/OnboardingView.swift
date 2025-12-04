@@ -146,7 +146,8 @@ struct OnboardingView: View {
             }
         }
         
-        OnboardingManager.shared.markOnboardingComplete()
+        // Mark onboarding complete for this specific user
+        OnboardingManager.shared.markOnboardingComplete(for: appEnvironment.appUser?.id)
         withAnimation {
             isPresented = false
         }
