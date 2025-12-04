@@ -140,44 +140,44 @@ class BaseRunningScene: SKScene, ObservableObject {
     }
     
     private func setupPlayerRunner() {
-        // Create player runner with default sprite first
-        playerRunner = createRunner(name: "You", nationality: "UnitedStatesFlag", isPlayer: true, spriteUrl: nil)
-        let runnerY = -frame.height / 2.5 + (frame.height * 0.2)
-        playerRunner.position = CGPoint(x: 0, y: runnerY)
-        addChild(playerRunner)
-        
-        // Load player's sprite from profile asynchronously
+        // Load player's sprite from profile first, then create runner
         if let appEnvironment = appEnvironment {
             Task { @MainActor in
+                var spriteUrl: String? = nil
+                
                 do {
-                    guard let profile = try await appEnvironment.supabaseConnection.getProfile() else {
-                        print("⚠️ Could not fetch player profile")
-                        return
-                    }
-                    
-                    if let spriteUrl = profile.selected_sprite_url, !spriteUrl.isEmpty {
-                        print("🎮 Loading player sprite from: \(spriteUrl)")
-                        
-                        // Load the texture
-                        if let texture = await SpriteManager.shared.loadSpriteTexture(from: spriteUrl),
-                           let runnerSprite = playerRunner.childNode(withName: "runnerSprite") as? SKSpriteNode {
-                            let defaultSize = runnerSprite.size // Store original size
-                            runnerSprite.texture = texture
-                            runnerSprite.size = defaultSize // Maintain consistent size
-                            
-                            // Store the custom texture for animation
-                            self.customSpriteTextures["player"] = texture
-                            print("✅ Player sprite loaded successfully")
-                        } else {
-                            print("❌ Failed to load player sprite texture")
+                    if let profile = try await appEnvironment.supabaseConnection.getProfile() {
+                        spriteUrl = profile.selected_sprite_url
+                        if let url = spriteUrl, !url.isEmpty {
+                            print("🎮 Preloading player sprite from: \(url)")
+                            // Preload the texture into cache
+                            _ = await SpriteManager.shared.loadSpriteTexture(from: url)
                         }
-                    } else {
-                        print("ℹ️ Player has no custom sprite selected")
                     }
                 } catch {
-                    print("❌ Error loading player sprite: \(error)")
+                    print("❌ Error loading player profile: \(error)")
+                }
+                
+                // Now create player runner with the sprite URL (will use cached texture if available)
+                playerRunner = createRunner(name: "You", nationality: "UnitedStatesFlag", isPlayer: true, spriteUrl: spriteUrl)
+                let runnerY = -frame.height / 2.5 + (frame.height * 0.2)
+                playerRunner.position = CGPoint(x: 0, y: runnerY)
+                addChild(playerRunner)
+                
+                // Store custom texture for animation if we have one
+                if let url = spriteUrl, !url.isEmpty {
+                    if let texture = await SpriteManager.shared.loadSpriteTexture(from: url) {
+                        self.customSpriteTextures["player"] = texture
+                        print("✅ Player sprite loaded and cached")
+                    }
                 }
             }
+        } else {
+            // No app environment, create with default sprite
+            playerRunner = createRunner(name: "You", nationality: "UnitedStatesFlag", isPlayer: true, spriteUrl: nil)
+            let runnerY = -frame.height / 2.5 + (frame.height * 0.2)
+            playerRunner.position = CGPoint(x: 0, y: runnerY)
+            addChild(playerRunner)
         }
     }
 //    
@@ -411,7 +411,8 @@ class BaseRunningScene: SKScene, ObservableObject {
     }
 
     private func updatePlayerAnimation(speedMps: CLLocationSpeed) {
-        guard let playerSprite = playerRunner?.childNode(withName: "runnerSprite") else {
+        guard let playerRunner = playerRunner,
+              let playerSprite = playerRunner.childNode(withName: "runnerSprite") else {
             return
         }
         
@@ -527,6 +528,7 @@ class BaseRunningScene: SKScene, ObservableObject {
     }
 
     private func ensurePlayerOnTop() {
+        guard let playerRunner = playerRunner else { return }
         playerRunner.zPosition = 10
         for runnerNode in otherRunners {
             runnerNode.zPosition = 5
@@ -559,7 +561,9 @@ class BaseRunningScene: SKScene, ObservableObject {
 
         // Z-order
         finishLine.zPosition = progress < 1.0 ? 5 : 10
-        playerRunner.zPosition = 10
+        if let playerRunner = playerRunner {
+            playerRunner.zPosition = 10
+        }
         for i in 0..<otherRunners.count {
             otherRunners[i].zPosition = otherRunnersCurrentDistances[i] < raceDistance ? 9 : 8
         }
@@ -580,7 +584,9 @@ class BaseRunningScene: SKScene, ObservableObject {
 
         // Stop the player's motion immediately
         playerDistance = raceDistance
-        playerRunner.childNode(withName: "runnerSprite")?.removeAllActions()
+        if let playerRunner = playerRunner {
+            playerRunner.childNode(withName: "runnerSprite")?.removeAllActions()
+        }
 
         // Optional: show "Race Complete" label (positioned higher to not block UI)
         let label = SKLabelNode(text: "Race Complete!")

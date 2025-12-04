@@ -17,6 +17,9 @@ struct ProfileTabView: View {
     @State private var isEditing = false
     @State private var isSignedOut = false
     @State private var showOnboarding = false  // NEW: Add this state
+    @State private var showTermsOfService = false
+    @State private var showPrivacyPolicy = false
+    @State private var showSafetyDisclaimer = false
     
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var selectedImage: UIImage? = nil
@@ -648,6 +651,44 @@ struct ProfileTabView: View {
                 }
             }
             
+            // Safety and Legal Section
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Safety & Legal")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .padding(.horizontal, 4)
+                
+                VStack(spacing: 0) {
+                    settingsRow(
+                        icon: "exclamationmark.shield.fill",
+                        title: "Safety Information",
+                        action: { showSafetyDisclaimer = true }
+                    )
+                    
+                    Divider()
+                        .background(Color.white.opacity(0.1))
+                        .padding(.leading, 44)
+                    
+                    settingsRow(
+                        icon: "doc.text.fill",
+                        title: "Terms of Service",
+                        action: { showTermsOfService = true }
+                    )
+                    
+                    Divider()
+                        .background(Color.white.opacity(0.1))
+                        .padding(.leading, 44)
+                    
+                    settingsRow(
+                        icon: "hand.raised.fill",
+                        title: "Privacy Policy",
+                        action: { showPrivacyPolicy = true }
+                    )
+                }
+                .background(Color.white.opacity(0.05))
+                .cornerRadius(12)
+            }
+            
             Button(action: {
                 Task {
                     await viewModel.signOut(appEnvironment: appEnvironment)
@@ -662,23 +703,42 @@ struct ProfileTabView: View {
                     .background(Color.red.opacity(0.8))
                     .cornerRadius(12)
             }
-            
-            // Debug button to reset onboarding
-            #if DEBUG
-            Button(action: {
-                OnboardingManager.shared.resetOnboarding(for: appEnvironment.appUser?.id)
-                showOnboarding = true
-            }) {
-                Text("🔄 Reset & Show Onboarding")
-                    .font(.caption)
-                    .foregroundColor(.orange)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(8)
-            }
-            #endif
         }
+        .sheet(isPresented: $showTermsOfService) {
+            TermsOfServiceView()
+        }
+        .sheet(isPresented: $showPrivacyPolicy) {
+            PrivacyPolicyView()
+        }
+        .sheet(isPresented: $showSafetyDisclaimer) {
+            SafetyDisclaimerView(isPresented: $showSafetyDisclaimer)
+        }
+    }
+    
+    // MARK: - Settings Row Helper
+    private func settingsRow(icon: String, title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 18))
+                    .foregroundColor(.orange)
+                    .frame(width: 24)
+                
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.gray)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 

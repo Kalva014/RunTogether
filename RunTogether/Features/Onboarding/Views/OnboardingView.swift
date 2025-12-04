@@ -13,6 +13,7 @@ struct OnboardingView: View {
     @State private var currentPage = 0
     @State private var showSpriteSelection = false
     @State private var selectedSpriteUrl: String? = nil
+    @State private var showSafetyDisclaimer = false
     
     let pages: [OnboardingPage] = [
         OnboardingPage(
@@ -116,7 +117,8 @@ struct OnboardingView: View {
                             currentPage += 1
                         }
                     } else {
-                        completeOnboarding()
+                        // Show safety disclaimer before completing onboarding
+                        showSafetyDisclaimer = true
                     }
                 }) {
                     Text(currentPage < pages.count - 1 ? "Next" : "Get Started")
@@ -130,6 +132,16 @@ struct OnboardingView: View {
                 .padding(.horizontal, 40)
                 .padding(.bottom, 40)
             }
+        }
+        .fullScreenCover(isPresented: $showSafetyDisclaimer) {
+            SafetyDisclaimerView(isPresented: $showSafetyDisclaimer)
+                .onDisappear {
+                    if !showSafetyDisclaimer {
+                        // Mark safety disclaimer as seen
+                        SafetyTipsManager.shared.markSafetyDisclaimerSeen(for: appEnvironment.appUser?.id)
+                        completeOnboarding()
+                    }
+                }
         }
     }
     

@@ -19,6 +19,8 @@ struct RunTabView: View {
     @State private var navigateToRunning = false
     @State private var activeMode: String = "Race"
     @State private var showStartOptions = false
+    @State private var showPreRunChecklist = false
+    @State private var pendingRunAction: (() async -> Void)? = nil
     
     @State private var showRaceDisabledTooltip = false
     
@@ -110,6 +112,17 @@ struct RunTabView: View {
                 }
             }
             .navigationBarHidden(true)
+            .fullScreenCover(isPresented: $showPreRunChecklist) {
+                PreRunSafetyChecklistView(isPresented: $showPreRunChecklist) {
+                    // Execute the pending run action after checklist is completed
+                    if let action = pendingRunAction {
+                        Task {
+                            await action()
+                        }
+                        pendingRunAction = nil
+                    }
+                }
+            }
             .fullScreenCover(isPresented: $navigateToRunning) {
                 if let raceId = createdRaceId {
                     RunningView(
@@ -553,6 +566,16 @@ struct RunTabView: View {
     @MainActor
     private func handleCreateRace() async {
         showStartOptions = false
+        
+        // Always show pre-run checklist before each race
+        pendingRunAction = { [self] in
+            await self.executeCreateRace()
+        }
+        showPreRunChecklist = true
+    }
+    
+    @MainActor
+    private func executeCreateRace() async {
         activeMode = "Race"
         guard let id = await viewModel.createRace(
             appEnvironment: appEnvironment,
@@ -570,6 +593,16 @@ struct RunTabView: View {
     @MainActor
     private func handleCreateCasualRun() async {
         showStartOptions = false
+        
+        // Always show pre-run checklist before each race
+        pendingRunAction = { [self] in
+            await self.executeCreateCasualRun()
+        }
+        showPreRunChecklist = true
+    }
+    
+    @MainActor
+    private func executeCreateCasualRun() async {
         activeMode = "Casual"
         guard let id = await viewModel.createRace(
             appEnvironment: appEnvironment,
@@ -586,6 +619,16 @@ struct RunTabView: View {
     @MainActor
     private func handleJoinSpecific() async {
         showStartOptions = false
+        
+        // Always show pre-run checklist before each race
+        pendingRunAction = { [self] in
+            await self.executeJoinSpecific()
+        }
+        showPreRunChecklist = true
+    }
+    
+    @MainActor
+    private func executeJoinSpecific() async {
         guard let result = await viewModel.joinSpecificRace(
             appEnvironment: appEnvironment,
             raceId: raceIdInput
@@ -606,6 +649,16 @@ struct RunTabView: View {
     @MainActor
     private func handleJoinRandom() async {
         showStartOptions = false
+        
+        // Always show pre-run checklist before each race
+        pendingRunAction = { [self] in
+            await self.executeJoinRandom()
+        }
+        showPreRunChecklist = true
+    }
+    
+    @MainActor
+    private func executeJoinRandom() async {
         activeMode = "Race"
         guard let id = await viewModel.joinRandomRace(
             appEnvironment: appEnvironment,
@@ -622,6 +675,16 @@ struct RunTabView: View {
     @MainActor
     private func handleJoinRandomCasual() async {
         showStartOptions = false
+        
+        // Always show pre-run checklist before each race
+        pendingRunAction = { [self] in
+            await self.executeJoinRandomCasual()
+        }
+        showPreRunChecklist = true
+    }
+    
+    @MainActor
+    private func executeJoinRandomCasual() async {
         activeMode = "Casual"
         guard let id = await viewModel.joinRandomRace(
             appEnvironment: appEnvironment,
@@ -638,6 +701,16 @@ struct RunTabView: View {
     @MainActor
     private func handleCreateRankedRace() async {
         showStartOptions = false
+        
+        // Always show pre-run checklist before each race
+        pendingRunAction = { [self] in
+            await self.executeCreateRankedRace()
+        }
+        showPreRunChecklist = true
+    }
+    
+    @MainActor
+    private func executeCreateRankedRace() async {
         activeMode = "ranked"
         guard let id = await viewModel.createRace(
             appEnvironment: appEnvironment,
@@ -655,6 +728,16 @@ struct RunTabView: View {
     @MainActor
     private func handleJoinRandomRanked() async {
         showStartOptions = false
+        
+        // Always show pre-run checklist before each race
+        pendingRunAction = { [self] in
+            await self.executeJoinRandomRanked()
+        }
+        showPreRunChecklist = true
+    }
+    
+    @MainActor
+    private func executeJoinRandomRanked() async {
         activeMode = "ranked"
         guard let id = await viewModel.joinRandomRace(
             appEnvironment: appEnvironment,
