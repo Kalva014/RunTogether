@@ -15,13 +15,13 @@ class SignUpViewModel: ObservableObject {
     
     init() {}
     
-    func signUp(email: String, username: String, first_name: String, last_name: String, password: String, appEnvironment: AppEnvironment) async -> Bool {
+    func signUp(email: String, username: String, first_name: String, last_name: String, country: String?, password: String, appEnvironment: AppEnvironment) async -> Bool {
         do {
             // Create user
             let user = try await appEnvironment.supabaseConnection.signUp(email: email, password: password, username: username)
             
             // Create profile
-            try await appEnvironment.supabaseConnection.createProfile(username: username, first_name: first_name, last_name: last_name, location: nil)
+            try await appEnvironment.supabaseConnection.createProfile(username: username, first_name: first_name, last_name: last_name, location: nil, country: country)
             
             // Update the environment variable so the user data can be passed
             appEnvironment.appUser = AppUser(id: user.id.uuidString, email: user.email ?? "", username: username)

@@ -67,23 +67,43 @@ struct PreRunSafetyChecklistView: View {
                 .padding(.top, 60)
                 
                 // Checklist
-                ScrollView {
-                    VStack(spacing: 12) {
-                        ForEach(Array(checklistItems.enumerated()), id: \.offset) { index, item in
-                            ChecklistRow(
-                                item: item,
-                                isChecked: checkedItems.contains(index),
-                                onToggle: {
-                                    if checkedItems.contains(index) {
-                                        checkedItems.remove(index)
-                                    } else {
-                                        checkedItems.insert(index)
-                                    }
-                                }
-                            )
-                        }
+                VStack(spacing: 8) {
+                    HStack {
+                        Text("Check all items to continue")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        Spacer()
+                        Text("\(checkedItems.count)/\(checklistItems.count)")
+                            .font(.caption)
+                            .foregroundColor(allChecked ? .orange : .gray)
+                            .fontWeight(.semibold)
                     }
                     .padding(.horizontal, 20)
+                    
+                    ScrollView(showsIndicators: true) {
+                        VStack(spacing: 12) {
+                            ForEach(Array(checklistItems.enumerated()), id: \.offset) { index, item in
+                                ChecklistRow(
+                                    item: item,
+                                    isChecked: checkedItems.contains(index),
+                                    onToggle: {
+                                        if checkedItems.contains(index) {
+                                            checkedItems.remove(index)
+                                        } else {
+                                            checkedItems.insert(index)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 8)
+                    }
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.orange.opacity(0.3), lineWidth: 2)
+                            .padding(.horizontal, 16)
+                    )
                 }
                 
                 // Action buttons

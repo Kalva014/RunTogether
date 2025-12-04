@@ -399,11 +399,11 @@ struct ProfileTabView: View {
                             .foregroundColor(.gray)
                     }
                     
-                    if !viewModel.location.isEmpty {
+                    if !viewModel.country.isEmpty {
                         HStack(spacing: 4) {
-                            Image(systemName: "location.fill")
-                                .font(.caption)
-                            Text(viewModel.location)
+                            Text(CountryFlagHelper.flagEmoji(for: viewModel.country))
+                                .font(.system(size: 16))
+                            Text(viewModel.country)
                                 .font(.subheadline)
                         }
                         .foregroundColor(.gray)
@@ -477,7 +477,7 @@ struct ProfileTabView: View {
                     editField(title: "Username", text: $viewModel.username, placeholder: "Enter username")
                     editField(title: "First Name", text: $viewModel.firstName, placeholder: "Enter first name")
                     editField(title: "Last Name", text: $viewModel.lastName, placeholder: "Enter last name")
-                    editField(title: "Location", text: $viewModel.location, placeholder: "Enter location")
+                    countryPicker
                 }
             } else {
                 VStack(spacing: 0) {
@@ -487,7 +487,7 @@ struct ProfileTabView: View {
                     Divider().background(Color.white.opacity(0.1))
                     profileRow(icon: "person.text.rectangle.fill", title: "Last Name", value: viewModel.lastName)
                     Divider().background(Color.white.opacity(0.1))
-                    profileRow(icon: "location.fill", title: "Location", value: viewModel.location)
+                    profileRowWithFlag(icon: "flag.fill", title: "Country", value: viewModel.country)
                 }
                 .background(Color.white.opacity(0.1))
                 .cornerRadius(16)
@@ -529,6 +529,78 @@ struct ProfileTabView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+    
+    private func profileRowWithFlag(icon: String, title: String, value: String) -> some View {
+        HStack {
+            Image(systemName: icon)
+                .font(.system(size: 16))
+                .foregroundColor(.orange)
+                .frame(width: 24)
+            
+            Text(title)
+                .font(.subheadline)
+                .foregroundColor(.gray)
+            
+            Spacer()
+            
+            if value.isEmpty {
+                Text("Not set")
+                    .font(.subheadline)
+                    .foregroundColor(.white)
+            } else {
+                HStack(spacing: 4) {
+                    Text(CountryFlagHelper.flagEmoji(for: value))
+                    Text(value)
+                        .font(.subheadline)
+                        .foregroundColor(.white)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+    }
+    
+    private var countryPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Country")
+                .font(.caption)
+                .foregroundColor(.gray)
+            
+            Menu {
+                ForEach(CountryFlagHelper.countries, id: \.self) { countryName in
+                    Button(action: {
+                        viewModel.country = countryName
+                    }) {
+                        HStack {
+                            Text(CountryFlagHelper.flagEmoji(for: countryName))
+                            Text(countryName)
+                        }
+                    }
+                }
+            } label: {
+                HStack {
+                    if viewModel.country.isEmpty {
+                        Text("Select your country")
+                            .foregroundColor(.gray)
+                    } else {
+                        HStack(spacing: 6) {
+                            Text(CountryFlagHelper.flagEmoji(for: viewModel.country))
+                                .font(.system(size: 20))
+                            Text(viewModel.country)
+                                .foregroundColor(.white)
+                        }
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .foregroundColor(.gray)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(12)
+            }
+        }
     }
     
     private var spriteSelectionSection: some View {

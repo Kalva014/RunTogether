@@ -59,7 +59,7 @@ class SupabaseConnection: ObservableObject {
 
     
     // MARK: - Profile Management
-    func createProfile(username: String, first_name: String, last_name: String, location: String?) async throws {
+    func createProfile(username: String, first_name: String, last_name: String, location: String?, country: String?) async throws {
         guard let userId = self.currentUserId else { return }
         
         let newRowData = Profile(
@@ -68,7 +68,8 @@ class SupabaseConnection: ObservableObject {
             username: username,
             first_name: first_name,
             last_name: last_name,
-            location: location
+            location: location,
+            country: country
         )
         
         do {
@@ -84,7 +85,7 @@ class SupabaseConnection: ObservableObject {
         }
     }
     
-    func updateProfile(username: String? = nil, firstName: String? = nil, lastName: String? = nil, location: String? = nil, profilePictureUrl: String? = nil, selectedSpriteUrl: String? = nil) async throws {
+    func updateProfile(username: String? = nil, firstName: String? = nil, lastName: String? = nil, location: String? = nil, country: String? = nil, profilePictureUrl: String? = nil, selectedSpriteUrl: String? = nil) async throws {
         guard let userId = self.currentUserId else { return }
         
         var updatesDict: [String: AnyJSON] = [:]
@@ -92,6 +93,7 @@ class SupabaseConnection: ObservableObject {
         if let firstName = firstName, !firstName.isEmpty { updatesDict["first_name"] = .string(firstName) }
         if let lastName = lastName, !lastName.isEmpty { updatesDict["last_name"] = .string(lastName) }
         if let location = location, !location.isEmpty { updatesDict["location"] = .string(location) }
+        if let country = country, !country.isEmpty { updatesDict["country"] = .string(country) }
         if let profilePictureUrl = profilePictureUrl { updatesDict["profile_picture_url"] = .string(profilePictureUrl) }
         if let selectedSpriteUrl = selectedSpriteUrl { updatesDict["selected_sprite_url"] = .string(selectedSpriteUrl) }
         

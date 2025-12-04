@@ -93,6 +93,15 @@ struct ProfileDetailView: View {
                     .font(.headline)
                     .foregroundColor(.gray)
                 
+                if let country = profile.country, !country.isEmpty {
+                    HStack(spacing: 4) {
+                        Text(CountryFlagHelper.flagEmoji(for: country))
+                        Text(country)
+                            .font(.subheadline)
+                    }
+                    .foregroundColor(.gray)
+                }
+                
                 if let location = profile.location, !location.isEmpty {
                     HStack(spacing: 4) {
                         Image(systemName: "location.fill")

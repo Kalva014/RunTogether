@@ -18,6 +18,7 @@ class ProfileTabViewModel: ObservableObject {
 @Published var firstName: String = ""
 @Published var lastName: String = ""
 @Published var location: String = ""
+@Published var country: String = ""
 @Published var profilePictureUrl: String?
 @Published var selectedSpriteUrl: String?
 @Published var isLoadingProfile = false
@@ -78,7 +79,7 @@ class ProfileTabViewModel: ObservableObject {
             username: username,
             firstName: firstName,
             lastName: lastName,
-            location: location,
+            country: country,
             profilePictureUrl: updatedProfilePictureUrl
         )
         
@@ -86,9 +87,9 @@ class ProfileTabViewModel: ObservableObject {
         updateLoadedProfile()
     }
     
-    func editProfile(appEnvironment: AppEnvironment, username: String?, firstName: String?, lastName: String?, location: String?, profilePictureUrl: String? = nil) async {
+    func editProfile(appEnvironment: AppEnvironment, username: String?, firstName: String?, lastName: String?, country: String?, profilePictureUrl: String? = nil) async {
         do {
-            try await appEnvironment.supabaseConnection.updateProfile(username: username, firstName: firstName, lastName: lastName, location: location, profilePictureUrl: profilePictureUrl)
+            try await appEnvironment.supabaseConnection.updateProfile(username: username, firstName: firstName, lastName: lastName, country: country, profilePictureUrl: profilePictureUrl)
         }
         catch {
             print("Error editing profile: \(error.localizedDescription)")
@@ -109,6 +110,7 @@ class ProfileTabViewModel: ObservableObject {
         firstName = profile.first_name
         lastName = profile.last_name
         location = profile.location ?? ""
+        country = profile.country ?? ""
         profilePictureUrl = profile.profile_picture_url
         selectedSpriteUrl = profile.selected_sprite_url
     }
@@ -119,6 +121,7 @@ class ProfileTabViewModel: ObservableObject {
         profile.first_name = firstName
         profile.last_name = lastName
         profile.location = location
+        profile.country = country
         profile.profile_picture_url = profilePictureUrl
         profile.selected_sprite_url = selectedSpriteUrl
         loadedProfile = profile

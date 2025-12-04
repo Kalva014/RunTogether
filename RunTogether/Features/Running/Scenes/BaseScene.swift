@@ -66,6 +66,7 @@ class BaseRunningScene: SKScene, ObservableObject {
         var speedMps: Double // speed in meters per second
         var lastUpdateTime: Date
         var spriteUrl: String? // URL to user's selected sprite
+        var country: String? // User's country for flag emoji
         
         // Check if data is stale (no update in 30 seconds)
         // Increased timeout to avoid removing finished runners too quickly
@@ -140,14 +141,16 @@ class BaseRunningScene: SKScene, ObservableObject {
     }
     
     private func setupPlayerRunner() {
-        // Load player's sprite from profile first, then create runner
+        // Load player's sprite and country from profile first, then create runner
         if let appEnvironment = appEnvironment {
             Task { @MainActor in
                 var spriteUrl: String? = nil
+                var country: String? = nil
                 
                 do {
                     if let profile = try await appEnvironment.supabaseConnection.getProfile() {
                         spriteUrl = profile.selected_sprite_url
+                        country = profile.country
                         if let url = spriteUrl, !url.isEmpty {
                             print("🎮 Preloading player sprite from: \(url)")
                             // Preload the texture into cache
@@ -158,8 +161,8 @@ class BaseRunningScene: SKScene, ObservableObject {
                     print("❌ Error loading player profile: \(error)")
                 }
                 
-                // Now create player runner with the sprite URL (will use cached texture if available)
-                playerRunner = createRunner(name: "You", nationality: "UnitedStatesFlag", isPlayer: true, spriteUrl: spriteUrl)
+                // Now create player runner with the sprite URL and country (will use cached texture if available)
+                playerRunner = createRunner(name: "You", nationality: country ?? "", isPlayer: true, spriteUrl: spriteUrl)
                 let runnerY = -frame.height / 2.5 + (frame.height * 0.2)
                 playerRunner.position = CGPoint(x: 0, y: runnerY)
                 addChild(playerRunner)
@@ -174,7 +177,7 @@ class BaseRunningScene: SKScene, ObservableObject {
             }
         } else {
             // No app environment, create with default sprite
-            playerRunner = createRunner(name: "You", nationality: "UnitedStatesFlag", isPlayer: true, spriteUrl: nil)
+            playerRunner = createRunner(name: "You", nationality: "", isPlayer: true, spriteUrl: nil)
             let runnerY = -frame.height / 2.5 + (frame.height * 0.2)
             playerRunner.position = CGPoint(x: 0, y: runnerY)
             addChild(playerRunner)
@@ -260,25 +263,16 @@ class BaseRunningScene: SKScene, ObservableObject {
             print("ℹ️ No custom sprite URL for \(nodeId), using default")
         }
 
-        // Only add flag + name for non-player runners
+        // Only add name label for non-player runners
         if !isPlayer {
-            let labelContainer = SKNode()
-            labelContainer.position = CGPoint(x: 0, y: runner.size.height / 2 + 10)
-
-            let flagSprite = SKSpriteNode(imageNamed: nationality)
-            flagSprite.size = CGSize(width: 40, height: 25)
-            flagSprite.position = CGPoint(x: -30, y: 0)
-
             let nameLabel = SKLabelNode(fontNamed: "Avenir-Medium")
             nameLabel.text = name
             nameLabel.fontColor = .white
             nameLabel.fontSize = 14
-            nameLabel.position = CGPoint(x: 20, y: -nameLabel.frame.height / 2)
+            nameLabel.position = CGPoint(x: 0, y: runner.size.height / 2 + 10)
+            nameLabel.verticalAlignmentMode = .bottom
 
-            labelContainer.addChild(flagSprite)
-            labelContainer.addChild(nameLabel)
-
-            runnerGroup.addChild(labelContainer)
+            runnerGroup.addChild(nameLabel)
         }
 
         return runnerGroup
@@ -814,7 +808,7 @@ class BaseRunningScene: SKScene, ObservableObject {
                             return
                         }
                         
-                        print("✅ Profile fetched for \(userId): \(profile.username), sprite: \(profile.selected_sprite_url ?? "none")")
+                        print("✅ Profile fetched for \(userId): \(profile.username), sprite: \(profile.selected_sprite_url ?? "none"), country: \(profile.country ?? "none")")
                         
                         realtimeOpponents[userId] = RealtimeOpponentData(
                             userId: userId,
@@ -823,7 +817,8 @@ class BaseRunningScene: SKScene, ObservableObject {
                             paceMinutes: pace,
                             speedMps: speedMps,
                             lastUpdateTime: Date(),
-                            spriteUrl: profile.selected_sprite_url
+                            spriteUrl: profile.selected_sprite_url,
+                            country: profile.country
                         )
                     } catch {
                         print("❌ Error fetching profile for \(userId): \(error)")
@@ -855,7 +850,7 @@ class BaseRunningScene: SKScene, ObservableObject {
             
             let runnerNode = createRunner(
                 name: opponent.username,
-                nationality: "UnitedStatesFlag", // Could be dynamic based on profile
+                nationality: opponent.country ?? "",
                 spriteUrl: opponent.spriteUrl
             )
             // Position runners in lanes to avoid overlapping with player (who is at x: 0)
@@ -1056,7 +1051,7 @@ class BaseRunningScene: SKScene, ObservableObject {
             
             let runnerNode = createRunner(
                 name: opponent.username,
-                nationality: "UnitedStatesFlag",
+                nationality: opponent.country ?? "",
                 spriteUrl: opponent.spriteUrl
             )
             // Position runners in lanes to avoid overlapping with player (who is at x: 0)

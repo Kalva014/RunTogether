@@ -17,6 +17,7 @@ struct SignUpView: View {
     @State private var username: String = ""
     @State private var first_name: String = ""
     @State private var last_name: String = ""
+    @State private var country: String = ""
     @State private var password: String = ""
     
     init() {
@@ -58,6 +59,8 @@ struct SignUpView: View {
                         
                         inputField(title: "Last Name", text: $last_name, placeholder: "Enter your last name")
                         
+                        countryPicker
+                        
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Password")
                                 .font(.caption)
@@ -89,6 +92,7 @@ struct SignUpView: View {
                                 username: username,
                                 first_name: first_name,
                                 last_name: last_name,
+                                country: country.isEmpty ? nil : country,
                                 password: password,
                                 appEnvironment: appEnvironment
                             )
@@ -130,6 +134,48 @@ struct SignUpView: View {
                 .background(Color.white.opacity(0.1))
                 .cornerRadius(12)
                 .foregroundColor(.white)
+        }
+    }
+    
+    private var countryPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Country")
+                .font(.caption)
+                .foregroundColor(.gray)
+            
+            Menu {
+                ForEach(CountryFlagHelper.countries, id: \.self) { countryName in
+                    Button(action: {
+                        country = countryName
+                    }) {
+                        HStack {
+                            Text(CountryFlagHelper.flagEmoji(for: countryName))
+                            Text(countryName)
+                        }
+                    }
+                }
+            } label: {
+                HStack {
+                    if country.isEmpty {
+                        Text("Select your country")
+                            .foregroundColor(.gray)
+                    } else {
+                        HStack(spacing: 6) {
+                            Text(CountryFlagHelper.flagEmoji(for: country))
+                                .font(.system(size: 20))
+                            Text(country)
+                                .foregroundColor(.white)
+                        }
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .foregroundColor(.gray)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding()
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(12)
+            }
         }
     }
     
