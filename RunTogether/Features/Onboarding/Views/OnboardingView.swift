@@ -8,8 +8,11 @@
 import SwiftUI
 
 struct OnboardingView: View {
+    @EnvironmentObject var appEnvironment: AppEnvironment
     @Binding var isPresented: Bool
     @State private var currentPage = 0
+    @State private var showSpriteSelection = false
+    @State private var selectedSpriteUrl: String? = nil
     
     let pages: [OnboardingPage] = [
         OnboardingPage(
@@ -47,6 +50,12 @@ struct OnboardingView: View {
             title: "Train and Run Together",
             description: "Share race IDs so friends can join your training runs, compare progress, and stay motivated throughout your running journey.",
             color: .teal
+        ),
+        OnboardingPage(
+            icon: "person.fill",
+            title: "Choose Your Sprite",
+            description: "Select a sprite to represent you in races. You can change this anytime in your profile.",
+            color: .orange
         )
     ]
     
@@ -75,8 +84,14 @@ struct OnboardingView: View {
                 // Page content
                 TabView(selection: $currentPage) {
                     ForEach(Array(pages.enumerated()), id: \.offset) { index, page in
-                        OnboardingPageView(page: page)
-                            .tag(index)
+                        if index == pages.count - 1 {
+                            // Sprite selection page
+                            OnboardingSpriteSelectionView(selectedSpriteUrl: $selectedSpriteUrl)
+                                .tag(index)
+                        } else {
+                            OnboardingPageView(page: page)
+                                .tag(index)
+                        }
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
@@ -119,6 +134,18 @@ struct OnboardingView: View {
     }
     
     private func completeOnboarding() {
+        // Save selected sprite if one was chosen
+        if let spriteUrl = selectedSpriteUrl {
+            Task {
+                do {
+                    try await appEnvironment.supabaseConnection.updateProfile(selectedSpriteUrl: spriteUrl)
+                    print("✅ Saved onboarding sprite selection: \(spriteUrl)")
+                } catch {
+                    print("❌ Failed to save sprite selection: \(error)")
+                }
+            }
+        }
+        
         OnboardingManager.shared.markOnboardingComplete()
         withAnimation {
             isPresented = false

@@ -19,6 +19,7 @@ class ProfileTabViewModel: ObservableObject {
 @Published var lastName: String = ""
 @Published var location: String = ""
 @Published var profilePictureUrl: String?
+@Published var selectedSpriteUrl: String?
 @Published var isLoadingProfile = false
 @Published var isSavingProfile = false
     
@@ -109,6 +110,7 @@ class ProfileTabViewModel: ObservableObject {
         lastName = profile.last_name
         location = profile.location ?? ""
         profilePictureUrl = profile.profile_picture_url
+        selectedSpriteUrl = profile.selected_sprite_url
     }
     
     private func updateLoadedProfile() {
@@ -118,6 +120,7 @@ class ProfileTabViewModel: ObservableObject {
         profile.last_name = lastName
         profile.location = location
         profile.profile_picture_url = profilePictureUrl
+        profile.selected_sprite_url = selectedSpriteUrl
         loadedProfile = profile
     }
 }

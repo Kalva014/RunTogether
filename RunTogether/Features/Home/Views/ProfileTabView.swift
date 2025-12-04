@@ -21,6 +21,7 @@ struct ProfileTabView: View {
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var selectedImage: UIImage? = nil
     @State private var showPhotoPermissionAlert = false
+    @State private var showSpriteSelection = false
     
     init() {
         _viewModel = StateObject(wrappedValue: ProfileTabViewModel())
@@ -71,6 +72,9 @@ struct ProfileTabView: View {
                         VStack(spacing: 24) {
                             profileHeader
                             
+                            // Sprite Selection Section
+                            spriteSelectionSection
+                            
                             // Ranked Status Section
                             if let rankedProfile = viewModel.myRankedProfile {
                                 rankedStatusSection(profile: rankedProfile)
@@ -106,6 +110,13 @@ struct ProfileTabView: View {
             }
             .fullScreenCover(isPresented: $showOnboarding) {
                 OnboardingView(isPresented: $showOnboarding)
+                    .environmentObject(appEnvironment)
+            }
+            .sheet(isPresented: $showSpriteSelection) {
+                SpriteSelectionView(currentSpriteUrl: viewModel.selectedSpriteUrl) { newSpriteUrl in
+                    viewModel.selectedSpriteUrl = newSpriteUrl
+                }
+                .environmentObject(appEnvironment)
             }
         }
         .onAppear {
@@ -515,6 +526,84 @@ struct ProfileTabView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+    
+    private var spriteSelectionSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "figure.run")
+                    .font(.title3)
+                    .foregroundColor(.orange)
+                
+                Text("Running Sprite")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                
+                Spacer()
+            }
+            
+            Button(action: { showSpriteSelection = true }) {
+                HStack(spacing: 16) {
+                    // Sprite preview
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.white.opacity(0.1))
+                            .frame(width: 80, height: 80)
+                        
+                        if let spriteUrl = viewModel.selectedSpriteUrl {
+                            AsyncImage(url: URL(string: spriteUrl)) { phase in
+                                switch phase {
+                                case .empty:
+                                    ProgressView()
+                                        .tint(.orange)
+                                case .success(let image):
+                                    image
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(width: 60, height: 60)
+                                case .failure:
+                                    Image(systemName: "photo")
+                                        .font(.system(size: 30))
+                                        .foregroundColor(.gray)
+                                @unknown default:
+                                    EmptyView()
+                                }
+                            }
+                        } else {
+                            VStack(spacing: 4) {
+                                Image(systemName: "figure.run")
+                                    .font(.system(size: 30))
+                                    .foregroundColor(.gray)
+                                Text("Default")
+                                    .font(.caption2)
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Choose Your Sprite")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                        
+                        Text("Customize how you appear in races")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14))
+                        .foregroundColor(.gray)
+                }
+                .padding(16)
+                .background(Color.white.opacity(0.05))
+                .cornerRadius(16)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
     }
     
     private var actionButtons: some View {

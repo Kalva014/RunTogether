@@ -84,7 +84,7 @@ class SupabaseConnection: ObservableObject {
         }
     }
     
-    func updateProfile(username: String? = nil, firstName: String? = nil, lastName: String? = nil, location: String? = nil, profilePictureUrl: String? = nil) async throws {
+    func updateProfile(username: String? = nil, firstName: String? = nil, lastName: String? = nil, location: String? = nil, profilePictureUrl: String? = nil, selectedSpriteUrl: String? = nil) async throws {
         guard let userId = self.currentUserId else { return }
         
         var updatesDict: [String: AnyJSON] = [:]
@@ -93,6 +93,7 @@ class SupabaseConnection: ObservableObject {
         if let lastName = lastName, !lastName.isEmpty { updatesDict["last_name"] = .string(lastName) }
         if let location = location, !location.isEmpty { updatesDict["location"] = .string(location) }
         if let profilePictureUrl = profilePictureUrl { updatesDict["profile_picture_url"] = .string(profilePictureUrl) }
+        if let selectedSpriteUrl = selectedSpriteUrl { updatesDict["selected_sprite_url"] = .string(selectedSpriteUrl) }
         
         guard !updatesDict.isEmpty else { return }
                 

@@ -39,10 +39,10 @@ class BaseRunningScene: SKScene, ObservableObject {
     @Published var isRaceOver = false
     
     // MARK: - Opponent State
-    var otherRunnersCurrentDistances: [CGFloat] = [50, 120] // starting distances
-    var otherRunnersSpeeds: [CGFloat] = [2.8, 3.5]
+    var otherRunnersCurrentDistances: [CGFloat] = [] // starting distances
+    var otherRunnersSpeeds: [Double] = [] // speeds
     var otherRunnersNames: [String] = []
-    var previousOpponentSpeeds: [CGFloat] = []
+    var previousOpponentSpeeds: [Double] = []
     var previousPlayerSpeedMultiplier: CGFloat = 0.0
     var previousOpponentPositions: [CGFloat] = [] // Track previous positions for passing detection
     var lastPassingSoundTime: TimeInterval = 0 // Throttle passing sounds
@@ -65,6 +65,7 @@ class BaseRunningScene: SKScene, ObservableObject {
         var paceMinutes: Double // pace in minutes per unit (km or mi)
         var speedMps: Double // speed in meters per second
         var lastUpdateTime: Date
+        var spriteUrl: String? // URL to user's selected sprite
         
         // Check if data is stale (no update in 30 seconds)
         // Increased timeout to avoid removing finished runners too quickly
@@ -79,6 +80,9 @@ class BaseRunningScene: SKScene, ObservableObject {
             return String(format: "%d:%02d", minutes, seconds)
         }
     }
+    
+    // Store custom sprite textures for animation
+    private var customSpriteTextures: [String: SKTexture] = [:]
     
     // MARK: - Lifecycle
     override init(size: CGSize) {
@@ -136,10 +140,45 @@ class BaseRunningScene: SKScene, ObservableObject {
     }
     
     private func setupPlayerRunner() {
-        playerRunner = createRunner(name: "You", nationality: "UnitedStatesFlag", isPlayer: true)
+        // Create player runner with default sprite first
+        playerRunner = createRunner(name: "You", nationality: "UnitedStatesFlag", isPlayer: true, spriteUrl: nil)
         let runnerY = -frame.height / 2.5 + (frame.height * 0.2)
         playerRunner.position = CGPoint(x: 0, y: runnerY)
         addChild(playerRunner)
+        
+        // Load player's sprite from profile asynchronously
+        if let appEnvironment = appEnvironment {
+            Task { @MainActor in
+                do {
+                    guard let profile = try await appEnvironment.supabaseConnection.getProfile() else {
+                        print("⚠️ Could not fetch player profile")
+                        return
+                    }
+                    
+                    if let spriteUrl = profile.selected_sprite_url, !spriteUrl.isEmpty {
+                        print("🎮 Loading player sprite from: \(spriteUrl)")
+                        
+                        // Load the texture
+                        if let texture = await SpriteManager.shared.loadSpriteTexture(from: spriteUrl),
+                           let runnerSprite = playerRunner.childNode(withName: "runnerSprite") as? SKSpriteNode {
+                            let defaultSize = runnerSprite.size // Store original size
+                            runnerSprite.texture = texture
+                            runnerSprite.size = defaultSize // Maintain consistent size
+                            
+                            // Store the custom texture for animation
+                            self.customSpriteTextures["player"] = texture
+                            print("✅ Player sprite loaded successfully")
+                        } else {
+                            print("❌ Failed to load player sprite texture")
+                        }
+                    } else {
+                        print("ℹ️ Player has no custom sprite selected")
+                    }
+                } catch {
+                    print("❌ Error loading player sprite: \(error)")
+                }
+            }
+        }
     }
 //    
 //    private func setupOpponentRunners() {
@@ -179,13 +218,47 @@ class BaseRunningScene: SKScene, ObservableObject {
     }
     
     // MARK: - Runner Creation & Animation
-    func createRunner(name: String, nationality: String, isPlayer: Bool = false) -> SKNode {
+    private func createRunner(name: String, nationality: String, isPlayer: Bool = false, spriteUrl: String? = nil) -> SKNode {
         let runnerGroup = SKNode()
 
-        // Runner sprite
+        // Runner sprite - use default for now, will be updated asynchronously
         let runner = SKSpriteNode(imageNamed: "MaleRunner")
+        let defaultSize = runner.size // Store the default size
         runner.name = "runnerSprite"
         runnerGroup.addChild(runner)
+        
+        // Load custom sprite if URL provided
+        if let spriteUrl = spriteUrl, !spriteUrl.isEmpty {
+            let nodeId = isPlayer ? "player" : name
+            print("🎨 Loading sprite for \(nodeId) from: \(spriteUrl)")
+            
+            Task { @MainActor in
+                do {
+                    if let texture = await SpriteManager.shared.loadSpriteTexture(from: spriteUrl) {
+                        // Verify the runner still exists before updating
+                        guard runner.parent != nil else {
+                            print("⚠️ Runner node removed before sprite loaded for \(nodeId)")
+                            return
+                        }
+                        
+                        runner.texture = texture
+                        // Maintain consistent size with default sprite
+                        runner.size = defaultSize
+                        
+                        // Store the custom texture for animation
+                        self.customSpriteTextures[nodeId] = texture
+                        print("✅ Stored custom texture for: \(nodeId)")
+                    } else {
+                        print("❌ Failed to load texture for \(nodeId)")
+                    }
+                } catch {
+                    print("❌ Error loading sprite for \(nodeId): \(error)")
+                }
+            }
+        } else {
+            let nodeId = isPlayer ? "player" : name
+            print("ℹ️ No custom sprite URL for \(nodeId), using default")
+        }
 
         // Only add flag + name for non-player runners
         if !isPlayer {
@@ -211,11 +284,11 @@ class BaseRunningScene: SKScene, ObservableObject {
         return runnerGroup
     }
     
-    func runAnimation(speedMultiplier: CGFloat = 1.0) -> SKAction {
-        // 1. Load textures from your asset catalog
+    func runAnimation(speedMultiplier: CGFloat = 1.0, customTexture: SKTexture? = nil) -> SKAction {
+        // 1. Load textures - use custom texture if provided, otherwise use default
 //        let standFrame = SKTexture(imageNamed: "MaleRunnerStanding")
 //        let runFrame = SKTexture(imageNamed: "MaleRunner")
-        let sprintingFrame = SKTexture(imageNamed: "MaleRunerSprinting")
+        let sprintingFrame = customTexture ?? SKTexture(imageNamed: "MaleRunerSprinting")
 
         // 2. Create the necessary actions
         let flipRight = SKAction.scaleX(to: 1, duration: 0)
@@ -338,17 +411,20 @@ class BaseRunningScene: SKScene, ObservableObject {
     }
 
     private func updatePlayerAnimation(speedMps: CLLocationSpeed) {
-        if let playerSprite = playerRunner.childNode(withName: "runnerSprite") {
-            if speedMps <= 0.1 {
+        guard let playerSprite = playerRunner?.childNode(withName: "runnerSprite") else {
+            return
+        }
+        
+        if speedMps <= 0.1 {
+            playerSprite.removeAllActions()
+            previousPlayerSpeedMultiplier = 0
+        } else {
+            let speedMultiplier = max(CGFloat(speedMps) / 3.0, 0.1)
+            if abs(speedMultiplier - previousPlayerSpeedMultiplier) > 0.1 {
                 playerSprite.removeAllActions()
-                previousPlayerSpeedMultiplier = 0
-            } else {
-                let speedMultiplier = max(CGFloat(speedMps) / 3.0, 0.1)
-                if abs(speedMultiplier - previousPlayerSpeedMultiplier) > 0.1 {
-                    playerSprite.removeAllActions()
-                    playerSprite.run(runAnimation(speedMultiplier: speedMultiplier))
-                    previousPlayerSpeedMultiplier = speedMultiplier
-                }
+                let customTexture = customSpriteTextures["player"]
+                playerSprite.run(runAnimation(speedMultiplier: speedMultiplier, customTexture: customTexture))
+                previousPlayerSpeedMultiplier = speedMultiplier
             }
         }
     }
@@ -430,7 +506,9 @@ class BaseRunningScene: SKScene, ObservableObject {
                     
                     // Only animate if the runner is actually moving
                     if newSpeed > 0.1 {
-                        runnerSprite.run(runAnimation(speedMultiplier: newSpeed / 3.0))
+                        let opponentName = otherRunnersNames[i]
+                        let customTexture = customSpriteTextures[opponentName]
+                        runnerSprite.run(runAnimation(speedMultiplier: newSpeed / 3.0, customTexture: customTexture))
                     }
                     // If speed is 0 or very low, leave sprite in idle state (no animation)
                     
@@ -722,20 +800,27 @@ class BaseRunningScene: SKScene, ObservableObject {
                 realtimeOpponents[userId]?.lastUpdateTime = Date()
             } else {
                 print("➕ New opponent detected: \(userId), fetching profile...")
-                // Fetch username for new opponent
+                // Fetch username and sprite for new opponent
                 Task { @MainActor in
-                    if let profile = try? await appEnvironment.supabaseConnection.getProfileById(userId: userId) {
-                        print("✅ Profile fetched for \(userId): \(profile.username)")
+                    do {
+                        guard let profile = try await appEnvironment.supabaseConnection.getProfileById(userId: userId) else {
+                            print("⚠️ Could not fetch profile for \(userId)")
+                            return
+                        }
+                        
+                        print("✅ Profile fetched for \(userId): \(profile.username), sprite: \(profile.selected_sprite_url ?? "none")")
+                        
                         realtimeOpponents[userId] = RealtimeOpponentData(
                             userId: userId,
                             username: profile.username,
                             distance: distance,
                             paceMinutes: pace,
                             speedMps: speedMps,
-                            lastUpdateTime: Date()
+                            lastUpdateTime: Date(),
+                            spriteUrl: profile.selected_sprite_url
                         )
-                    } else {
-                        print("⚠️ Could not fetch profile for \(userId)")
+                    } catch {
+                        print("❌ Error fetching profile for \(userId): \(error)")
                     }
                 }
             }
@@ -760,9 +845,12 @@ class BaseRunningScene: SKScene, ObservableObject {
             let index = otherRunners.count
             let opponent = activeOpponents[index]
             
+            print("🏃 Creating runner for \(opponent.username) with sprite URL: \(opponent.spriteUrl ?? "nil")")
+            
             let runnerNode = createRunner(
                 name: opponent.username,
-                nationality: "UnitedStatesFlag" // Could be dynamic based on profile
+                nationality: "UnitedStatesFlag", // Could be dynamic based on profile
+                spriteUrl: opponent.spriteUrl
             )
             // Position runners in lanes to avoid overlapping with player (who is at x: 0)
             let laneSpacing: CGFloat = 120
@@ -783,7 +871,8 @@ class BaseRunningScene: SKScene, ObservableObject {
             if let sprite = runnerNode.childNode(withName: "runnerSprite") {
                 // Only start animation if the opponent is actually moving
                 if opponent.speedMps > 0.1 {
-                    sprite.run(runAnimation(speedMultiplier: CGFloat(opponent.speedMps) / 3.0))
+                    let customTexture = customSpriteTextures[opponent.username]
+                    sprite.run(runAnimation(speedMultiplier: CGFloat(opponent.speedMps) / 3.0, customTexture: customTexture))
                 }
                 // If speed is 0 or very low, leave sprite in idle state (no animation)
             }
@@ -910,7 +999,9 @@ class BaseRunningScene: SKScene, ObservableObject {
                         
                         // Only animate if the runner is actually moving
                         if newSpeed > 0.1 {
-                            runnerSprite.run(runAnimation(speedMultiplier: newSpeed / 3.0))
+                            let opponentName = otherRunnersNames[i]
+                            let customTexture = customSpriteTextures[opponentName]
+                            runnerSprite.run(runAnimation(speedMultiplier: newSpeed / 3.0, customTexture: customTexture))
                         }
                         // If speed is 0 or very low, leave sprite in idle state (no animation)
                         
@@ -955,11 +1046,12 @@ class BaseRunningScene: SKScene, ObservableObject {
             let index = otherRunners.count
             let opponent = activeOpponents[index]
             
-            print("➕ Creating visual runner for \(opponent.username) at index \(index)")
+            print("➕ Creating visual runner for \(opponent.username) at index \(index) with sprite URL: \(opponent.spriteUrl ?? "nil")")
             
             let runnerNode = createRunner(
                 name: opponent.username,
-                nationality: "UnitedStatesFlag"
+                nationality: "UnitedStatesFlag",
+                spriteUrl: opponent.spriteUrl
             )
             // Position runners in lanes to avoid overlapping with player (who is at x: 0)
             let laneSpacing: CGFloat = 120
@@ -980,7 +1072,8 @@ class BaseRunningScene: SKScene, ObservableObject {
             if let sprite = runnerNode.childNode(withName: "runnerSprite") {
                 // Only start animation if the opponent is actually moving
                 if opponent.speedMps > 0.1 {
-                    sprite.run(runAnimation(speedMultiplier: CGFloat(opponent.speedMps) / 3.0))
+                    let customTexture = customSpriteTextures[opponent.username]
+                    sprite.run(runAnimation(speedMultiplier: CGFloat(opponent.speedMps) / 3.0, customTexture: customTexture))
                 }
                 // If speed is 0 or very low, leave sprite in idle state (no animation)
             }
