@@ -30,6 +30,10 @@ class ChatViewModel: ObservableObject {
     @Published var isSubscribed: Bool = false
     @Published var currentUsername: String = "You"
     
+    // Lifecycle guards
+    private var isChatActive = false
+    private var isCleanedUp = false
+    
     init(raceId: UUID? = nil) {
         self.raceId = raceId
     }
@@ -38,34 +42,38 @@ class ChatViewModel: ObservableObject {
     
     /// Start listening to chat messages
     func startChat(appEnvironment: AppEnvironment) async {
+        guard !isChatActive, !isCleanedUp else { return }
+        
         // Only stop chat if changing raceId (prevents double-unsubscribe race bugs)
         if self.appEnvironment != nil && self.raceId != appEnvironment.supabaseConnection.currentChatRaceId {
-            print("[ChatViewModel] Switching chats from raceId: \(self.raceId?.uuidString ?? "nil") to \(appEnvironment.supabaseConnection.currentChatRaceId?.uuidString ?? "nil") (will clear state)")
             await stopChat()
             self.messages.removeAll()
         }
         guard let raceId = raceId else {
-            print("❌ No raceId provided for chat")
             return
         }
+        
+        isChatActive = true
         self.appEnvironment = appEnvironment
         currentUserId = appEnvironment.supabaseConnection.currentUserId
-        print("💬 [ChatViewModel] Starting chat for race: \(raceId)")
+        
         await appEnvironment.supabaseConnection.subscribeToChatBroadcasts(raceId: raceId)
         await loadCurrentUsername(from: appEnvironment)
         Task { @MainActor in
             await processChatMessages(appEnvironment: appEnvironment)
         }
         isSubscribed = true
-        print("✅ [ChatViewModel] Chat initialized for raceId=\(raceId.uuidString)")
     }
     
     /// Stop listening to chat messages
     func stopChat() async {
-        guard let appEnvironment = appEnvironment else { return }
+        guard isChatActive, !isCleanedUp, let appEnvironment = appEnvironment else { return }
+        
+        isCleanedUp = true
+        isChatActive = false
+        
         await appEnvironment.supabaseConnection.unsubscribeFromChatBroadcasts()
         isSubscribed = false
-        print("🛑 [ChatViewModel] Chat stopped for raceId=\(raceId?.uuidString ?? "nil")")
         self.messages.removeAll()
     }
     
@@ -99,19 +107,16 @@ class ChatViewModel: ObservableObject {
     /// Process incoming chat messages from broadcast
     private func processChatMessages(appEnvironment: AppEnvironment) async {
         guard let channel = appEnvironment.supabaseConnection.chatChannel else {
-            print("❌ No chat channel available")
             return
         }
         
         let stream = channel.broadcastStream(event: "chat_message")
-        print("✅ Started listening to chat stream")
         
         for await message in stream {
-            print("💬 Received chat message: \(message)")
+            guard isChatActive, !isCleanedUp else { break }
             
             // Extract payload from the message
             guard let payload = message["payload"]?.objectValue else {
-                print("⚠️ No payload in chat message")
                 continue
             }
             
@@ -120,13 +125,11 @@ class ChatViewModel: ObservableObject {
                   let username = payload["username"]?.stringValue,
                   let messageText = payload["message"]?.stringValue,
                   let timestampString = payload["timestamp"]?.stringValue else {
-                print("⏭️ Invalid chat message format")
                 continue
             }
             
             // Skip our own messages (we already added them locally)
             if userId == appEnvironment.supabaseConnection.currentUserId {
-                print("⏭️ Skipping own message")
                 continue
             }
             
@@ -144,11 +147,7 @@ class ChatViewModel: ObservableObject {
             
             // Add to messages array
             messages.append(chatMessage)
-            
-            print("✅ Added chat message from \(username): \(messageText)")
         }
-        
-        print("🛑 Chat stream ended")
     }
     
     func isMessageFromCurrentUser(_ message: ChatMessage) -> Bool {

@@ -9,6 +9,7 @@ import SwiftUI
 
 @main
 struct RunTogetherApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject var supabaseConnection = SupabaseConnection()
     @StateObject var appEnvironment: AppEnvironment
 

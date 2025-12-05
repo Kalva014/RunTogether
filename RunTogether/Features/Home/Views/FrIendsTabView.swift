@@ -15,6 +15,7 @@ struct FriendsTabView: View {
     @State private var searchText = ""
     @State private var searchTask: Task<Void, Never>? = nil
     @State private var activeTab: FriendTab = .myFriends
+    @State private var hasLoadedFriends = false
     
     enum FriendTab {
         case myFriends
@@ -48,9 +49,9 @@ struct FriendsTabView: View {
             .navigationBarHidden(true)
         }
         .task {
-            if activeTab == .myFriends {
-                await viewModel.loadFriends(appEnvironment: appEnvironment)
-            }
+            guard !hasLoadedFriends, activeTab == .myFriends else { return }
+            hasLoadedFriends = true
+            await viewModel.loadFriends(appEnvironment: appEnvironment)
         }
         .onDisappear {
             searchTask?.cancel()
@@ -63,7 +64,7 @@ struct FriendsTabView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Friends")
-                        .font(.system(size: 48, weight: .bold))
+                        .font(.system(size: ResponsiveLayout.titleFontSize, weight: .bold))
                         .foregroundColor(.white)
                     
                     Text(activeTab == .myFriends ? "\(viewModel.friends.count) connected" : "Discover users")
@@ -77,11 +78,15 @@ struct FriendsTabView: View {
             // Tab Switcher
             HStack(spacing: 12) {
                 Button(action: {
+                    guard activeTab != .myFriends else { return }
                     activeTab = .myFriends
                     searchText = ""
                     viewModel.clearSearchState()
-                    Task {
-                        await viewModel.loadFriends(appEnvironment: appEnvironment)
+                    if !hasLoadedFriends {
+                        Task {
+                            hasLoadedFriends = true
+                            await viewModel.loadFriends(appEnvironment: appEnvironment)
+                        }
                     }
                 }) {
                     Text("My Friends")
@@ -94,6 +99,7 @@ struct FriendsTabView: View {
                 }
                 
                 Button(action: {
+                    guard activeTab != .discover else { return }
                     activeTab = .discover
                     searchText = ""
                     viewModel.clearSearchState()

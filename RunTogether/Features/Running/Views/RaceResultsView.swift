@@ -24,6 +24,7 @@ struct RaceResultsView: View {
     
     @State private var navigateHome: Bool = false
     @State private var showChat: Bool = false
+    @State private var hasAppeared = false
     @StateObject private var chatViewModel: ChatViewModel
     @StateObject private var resultsViewModel: RaceResultsViewModel
     

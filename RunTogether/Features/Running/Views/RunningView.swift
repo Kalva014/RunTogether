@@ -12,6 +12,7 @@ import SwiftUI
 import SpriteKit
 
 struct RunningView: View {
+    // MARK: - Properties
     let mode: String
     let isTreadmillMode: Bool
     let distance: String
@@ -29,6 +30,8 @@ struct RunningView: View {
     @State private var showChat = false
     @State private var showLeaderboard = false
     @State private var isRankedRace = false
+    @State private var hasAppeared = false
+    @State private var isCleaningUp = false
     @Environment(\.dismiss) private var dismiss
     
     init(mode: String, isTreadmillMode: Bool, distance: String, useMiles: Bool, raceId: UUID? = nil) {
@@ -80,11 +83,7 @@ struct RunningView: View {
                     
                     Button(action: {
                         appEnvironment.soundManager.playNavigation()
-                        print("🎯 Results button tapped - navigating to results")
-                        print("🎯 Current navigateToResults value: \(navigateToResults)")
-                        print("🎯 Race over status: \(viewModel.raceScene.isRaceOver)")
-                        navigateToResults = true 
-                        print("🎯 Set navigateToResults to: \(navigateToResults)")
+                        navigateToResults = true
                     }) {
                         HStack {
                             Image(systemName: "flag.checkered")
@@ -117,7 +116,10 @@ struct RunningView: View {
             }
         }
         .navigationBarHidden(true)
+        .persistentSystemOverlays(.hidden) // Hide system overlays for immersive experience
         .onAppear {
+            guard !hasAppeared else { return }
+            hasAppeared = true
             viewModel.raceScene.size = CGSize(
                 width: UIScreen.main.bounds.width,
                 height: UIScreen.main.bounds.height
@@ -125,6 +127,9 @@ struct RunningView: View {
             viewModel.raceScene.scaleMode = .fill
             
             viewModel.setAppEnvironment(appEnvironment: appEnvironment)
+            
+            // Prevent screen from dimming during race
+            UIApplication.shared.isIdleTimerDisabled = true
             
             Task {
                 await viewModel.startRealtime(appEnvironment: appEnvironment)
@@ -136,29 +141,36 @@ struct RunningView: View {
                     do {
                         let raceDetails = try await appEnvironment.supabaseConnection.getRaceDetails(raceId: raceId!)
                         isRankedRace = raceDetails.mode == "ranked"
-                        print("🏆 Race mode from DB: '\(raceDetails.mode)' - isRanked: \(isRankedRace)")
                     } catch {
-                        print("⚠️ Error fetching race details: \(error)")
                         // Fallback to mode parameter
                         isRankedRace = mode == "ranked" || mode == "Race"
-                        print("🏆 Fallback: mode='\(mode)' - isRanked: \(isRankedRace)")
                     }
                 } else {
                     // For non-multiplayer races, check the mode parameter
                     isRankedRace = mode == "ranked" || mode == "Race"
-                    print("🏆 No raceId, using mode='\(mode)' - isRanked: \(isRankedRace)")
                 }
             }
         }
         .onChange(of: viewModel.raceScene.isRaceOver) { isRaceOver in
-            guard isRaceOver else { return }
+            guard isRaceOver, !isCleaningUp else { return }
+            isCleaningUp = true
+            
             Task {
                 await viewModel.stopRealtime(appEnvironment: appEnvironment)
                 await chatViewModel.stopChat()
+                
+                // Re-enable idle timer when race is over
+                UIApplication.shared.isIdleTimerDisabled = false
             }
         }
         .onDisappear {
+            guard !isCleaningUp else { return }
+            isCleaningUp = true
+            
             Task {
+                // Re-enable idle timer
+                UIApplication.shared.isIdleTimerDisabled = false
+                
                 await viewModel.stopRealtime(appEnvironment: appEnvironment)
                 await chatViewModel.stopChat()
                 
@@ -190,23 +202,12 @@ struct RunningView: View {
                     raceId: raceId,
                     isRankedRace: isRankedRace
                 )
-                .onAppear {
-                    print("🏁 Navigating to results with player finish time: \(viewModel.raceScene.finishTimes[-1] ?? -1)")
-                    print("🏁 isRankedRace: \(isRankedRace)")
-                    print("🏁 Current leaderboard:")
-                    for (index, runner) in viewModel.leaderboard.enumerated() {
-                        let status = runner.finishTime != nil ? "FINISHED(\(runner.finishTime!))" : "ACTIVE"
-                        print("  \(index + 1). \(runner.name) - \(status) - distance: \(runner.distance)")
-                    }
-                }
             }
         }
         .alert("Leave Race?", isPresented: $showLeaveConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Leave", role: .destructive) {
                 Task {
-                    print("🚪 User initiated race leave")
-                    
                     do {
                         if let raceId = raceId {
                             // Stop realtime first
@@ -219,24 +220,19 @@ struct RunningView: View {
                                     raceId: raceId, 
                                     userId: appEnvironment.supabaseConnection.currentUserId ?? UUID()
                                 )
-                                print("✅ Marked as disconnected")
                             }
                             
                             // Leave the race
                             try await appEnvironment.supabaseConnection.leaveRace(raceId: raceId)
-                            print("✅ Successfully left race")
                         }
                         
                         // Always dismiss the view, even if there were errors
-                        print("🔄 Attempting to dismiss RunningView")
                         await MainActor.run {
                             dismiss()
                         }
                         
                     } catch {
-                        print("❌ Error during race leave: \(error)")
                         // Still dismiss even if there was an error
-                        print("🔄 Dismissing despite error")
                         await MainActor.run {
                             dismiss()
                         }
@@ -336,8 +332,8 @@ struct RunningView: View {
                 }
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 60)
+        .padding(.horizontal, ResponsiveLayout.horizontalPadding)
+        .padding(.top, max(60, ResponsiveLayout.safeAreaTopPadding + 16))
     }
     
     // MARK: - Bottom Controls
@@ -384,8 +380,8 @@ struct RunningView: View {
             
             Spacer()
         }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 40)
+        .padding(.horizontal, ResponsiveLayout.horizontalPadding)
+        .padding(.bottom, max(40, ResponsiveLayout.safeAreaBottomPadding + 20))
     }
     
     // MARK: - Treadmill Sidebar

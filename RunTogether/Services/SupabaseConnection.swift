@@ -266,6 +266,48 @@ class SupabaseConnection: ObservableObject {
         }
     }
     
+    /// Delete the current user's account and all associated data
+    /// Note: Requires the delete_own_account() database function to be set up in Supabase
+    /// See SUPABASE_DELETE_USER_SETUP.md for setup instructions
+    func deleteAccount() async throws {
+        guard let userId = self.currentUserId else {
+            throw NSError(domain: "SupabaseConnection", code: 401,
+                          userInfo: [NSLocalizedDescriptionKey: "User not signed in"])
+        }
+        
+        do {
+            // Try to use the RPC function if it exists
+            // This will delete both profile and auth user
+            do {
+                try await client.rpc("delete_own_account").execute()
+            } catch {
+                // If RPC function doesn't exist, fall back to manual deletion
+                print("RPC function not found, using fallback method")
+                
+                // Delete profile data from Profiles table
+                // Note: If you have foreign key constraints with CASCADE DELETE,
+                // this will automatically delete related data (stats, race participants, etc.)
+                _ = try await client
+                    .from("Profiles")
+                    .delete()
+                    .eq("id", value: userId.uuidString)
+                    .execute()
+                
+                // Note: Auth user will remain in auth.users table
+                // Set up the database function for complete deletion
+            }
+            
+            // Sign out and clear local state
+            try await self.client.auth.signOut()
+            self.currentUserId = nil
+            self.isAuthenticated = false
+            
+        } catch {
+            print("Error deleting account: \(error)")
+            throw error
+        }
+    }
+    
     // MARK: - Multiplayer Methods
     // CREATE RACE
     func createRace(name: String? = nil, mode: String, start_time: Date, distance: Double, useMiles: Bool) async throws -> Race? {
@@ -646,6 +688,25 @@ class SupabaseConnection: ObservableObject {
 
     
     // MARK: - Race Completion
+    /// Fetch all active participants in a race (excluding current user)
+    func getRaceParticipants(raceId: UUID) async throws -> [RaceParticipants] {
+        guard let currentUserId = self.currentUserId else {
+            throw NSError(domain: "SupabaseConnection", code: 401,
+                          userInfo: [NSLocalizedDescriptionKey: "User not signed in"])
+        }
+        
+        let participants: [RaceParticipants] = try await self.client
+            .from("Race_Participants")
+            .select()
+            .eq("race_id", value: raceId.uuidString)
+            .neq("user_id", value: currentUserId.uuidString)
+            .is("finish_time", value: nil) // Only get active participants
+            .execute()
+            .value
+        
+        return participants
+    }
+    
     func checkIfRaceFinished(raceId: UUID) async throws {
         do {
             let participants: [RaceParticipants] = try await self.client

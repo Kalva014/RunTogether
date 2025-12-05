@@ -21,12 +21,16 @@ class RunningViewModel: ObservableObject {
             raceScene.raceDistance = convertDistanceToMeters(distance)
         }
     }
-    private let healthManager = HealthKitManager() // New instance of your HealthKitManager
+    private let healthManager = HealthKitManager()
     private var cancellables = Set<AnyCancellable>()
     var mode: String = "Race"
     var isTreadmillMode: Bool = false
     var distance: String = "5K"
     var raceId: UUID?
+    
+    // MARK: - Lifecycle Guards
+    private var isRealtimeActive = false
+    private var isCleanedUp = false
     
     // MARK: - Local → Realtime Updates
     private var broadcastTimer: Timer?
@@ -77,25 +81,25 @@ class RunningViewModel: ObservableObject {
     }
     
     func startRealtime(appEnvironment: AppEnvironment) async {
-        guard let raceId = self.raceId else {
-            print("❌ No raceId provided — realtime not started")
+        guard let raceId = self.raceId, !isRealtimeActive, !isCleanedUp else {
             return
         }
         
-        print("🚀 Starting realtime for race: \(raceId)")
+        isRealtimeActive = true
         
         // Start the scene's realtime updates
         await raceScene.startRealtimeUpdates(raceId: raceId, appEnvironment: appEnvironment)
         
-        print("✅ Scene realtime updates started")
-        
         // Start broadcasting our own position
         startBroadcastingPlayerUpdates(appEnvironment: appEnvironment)
-        
-        print("✅ Realtime fully initialized")
     }
 
     func stopRealtime(appEnvironment: AppEnvironment) async {
+        guard isRealtimeActive, !isCleanedUp else { return }
+        
+        isCleanedUp = true
+        isRealtimeActive = false
+        
         // Stop scene realtime
         raceScene.stopRealtimeUpdates()
         
@@ -110,13 +114,12 @@ class RunningViewModel: ObservableObject {
     private func startBroadcastingPlayerUpdates(appEnvironment: AppEnvironment) {
         broadcastTimer?.invalidate()
         
-        print("📢 Starting broadcast timer for race updates")
-        
         broadcastTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self = self,
-                      let raceId = self.raceId else {
-                    print("⚠️ Cannot broadcast: missing self or raceId")
+                      let raceId = self.raceId,
+                      self.isRealtimeActive,
+                      !self.isCleanedUp else {
                     return
                 }
                 
@@ -134,8 +137,6 @@ class RunningViewModel: ObservableObject {
                     await self.raceScene.currentPlayerSpeed : 
                     (await self.locationManager?.currentSpeed ?? 0.0)
                 
-//                print("📤 Broadcasting update: distance=\(distance)m, pace=\(paceMinutes)min, speed=\(currentSpeed)m/s")
-                
                 await appEnvironment.supabaseConnection.broadcastRaceUpdate(
                     raceId: raceId,
                     distance: distance,
@@ -150,11 +151,7 @@ class RunningViewModel: ObservableObject {
     private func requestHealthKitAuthorization() {
         healthManager.requestAuthorization { [weak self] success in
             if success {
-                print("HealthKit authorization granted.")
                 self?.startHeartRateObservation()
-            } else {
-                print("HealthKit authorization denied.")
-                // Handle the case where permission is denied
             }
         }
     }

@@ -11,6 +11,7 @@ struct ContentView: View {
     @EnvironmentObject var appEnvironment: AppEnvironment
     @State private var showOnboarding = false
     @State private var onboardingCompleted = false
+    @State private var hasCheckedOnboarding = false
     
     var body: some View {
         Group {
@@ -19,20 +20,15 @@ struct ContentView: View {
                 if OnboardingManager.shared.hasSeenOnboarding(for: user.id) || onboardingCompleted {
                     // Onboarding complete → show HomeView
                     HomeView()
-                        .onAppear {
-                            print("🏠 Showing HomeView - onboarding already completed for user: \(user.id)")
-                        }
                 } else {
                     // First time user → show onboarding first
                     Color.black.ignoresSafeArea()
                         .onAppear {
-                            print("👋 New user detected - showing onboarding for user: \(user.id)")
-                            print("🔍 Current showOnboarding state: \(showOnboarding)")
+                            guard !hasCheckedOnboarding else { return }
+                            hasCheckedOnboarding = true
                             // Small delay for smoother transition
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                print("⏰ Setting showOnboarding to true")
                                 showOnboarding = true
-                                print("✅ showOnboarding is now: \(showOnboarding)")
                             }
                         }
                 }
@@ -43,21 +39,10 @@ struct ContentView: View {
         }
         .id(appEnvironment.appUser?.id ?? "logged-out")
         .fullScreenCover(isPresented: $showOnboarding, onDismiss: {
-            print("👋 Onboarding dismissed, setting onboardingCompleted to true")
             onboardingCompleted = true
+            hasCheckedOnboarding = false
         }) {
             OnboardingView(isPresented: $showOnboarding)
-                .onAppear {
-                    print("🎉 OnboardingView fullScreenCover appeared!")
-                }
-        }
-        .onChange(of: appEnvironment.appUser) { newUser in
-            if let user = newUser {
-                print("🔄 AppUser changed to: \(user.email) (ID: \(user.id))")
-                print("📊 Onboarding status: \(OnboardingManager.shared.hasSeenOnboarding(for: user.id))")
-            } else {
-                print("🔄 AppUser cleared")
-            }
         }
     }
 }
@@ -74,11 +59,11 @@ extension ContentView {
                     // Logo and branding
                     VStack(spacing: 20) {
                         Image(systemName: "figure.run.circle.fill")
-                            .font(.system(size: 100))
+                            .font(.system(size: ResponsiveLayout.titleFontSize * 2))
                             .foregroundColor(.orange)
                         
                         Text("RunTogether")
-                            .font(.system(size: 48, weight: .bold))
+                            .font(.system(size: ResponsiveLayout.titleFontSize, weight: .bold))
                             .foregroundColor(.white)
                         
                         Text("Your social running companion")
@@ -115,7 +100,7 @@ extension ContentView {
                             appEnvironment.soundManager.playNavigation()
                         })
                     }
-                    .padding(.horizontal, 40)
+                    .padding(.horizontal, ResponsiveLayout.horizontalPadding * 2)
                     
                     Spacer()
                     Spacer()

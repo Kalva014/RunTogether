@@ -23,6 +23,7 @@ struct RunTabView: View {
     @State private var pendingRunAction: (() async -> Void)? = nil
     
     @State private var showRaceDisabledTooltip = false
+    @State private var hasAppeared = false
     
     var distanceOptions: [String] {
         useMiles
@@ -88,14 +89,14 @@ struct RunTabView: View {
                     headerView
                     
                     ScrollView {
-                        VStack(spacing: 24) {
+                        VStack(spacing: ResponsiveLayout.sectionSpacing) {
                             heroSection
                             distanceSelector
                             treadmillSettingsSection
                             guidedRunsSection
                         }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 100)
+                        .responsiveHorizontalPadding()
+                        .padding(.bottom, ResponsiveLayout.bottomTabBarPadding)
                     }
                 }
                 
@@ -155,7 +156,7 @@ struct RunTabView: View {
     private var heroSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Run")
-                .font(.system(size: 48, weight: .bold))
+                .font(.system(size: ResponsiveLayout.titleFontSize, weight: .bold))
                 .foregroundColor(.white)
             
             Text("Start a Run")
@@ -219,7 +220,7 @@ struct RunTabView: View {
                     .tint(.orange)
             }
         }
-        .padding(20)
+        .responsiveCardPadding()
         .background(Color.white.opacity(0.1))
         .cornerRadius(16)
     }
@@ -285,7 +286,7 @@ struct RunTabView: View {
                     .opacity(raceIdInput.isEmpty ? 0.5 : 1)
                 }
             }
-            .padding(20)
+            .responsiveCardPadding()
             .background(Color.white.opacity(0.1))
             .cornerRadius(16)
         }
@@ -488,7 +489,8 @@ struct RunTabView: View {
                     }
                     .padding(.bottom, 20)
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, ResponsiveLayout.horizontalPadding)
+                .padding(.top, ResponsiveLayout.sectionSpacing)
                 .background(Color(white: 0.15))
                 .cornerRadius(20, corners: [.topLeft, .topRight])
             }

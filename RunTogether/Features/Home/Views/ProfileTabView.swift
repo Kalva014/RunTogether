@@ -20,6 +20,7 @@ struct ProfileTabView: View {
     @State private var showTermsOfService = false
     @State private var showPrivacyPolicy = false
     @State private var showSafetyDisclaimer = false
+    @State private var showDeleteConfirmation = false
     
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var selectedImage: UIImage? = nil
@@ -60,6 +61,17 @@ struct ProfileTabView: View {
         viewModel.resetForm()
         selectedImage = nil
         isEditing = false
+    }
+    
+    private func deleteAccount() async {
+        do {
+            try await appEnvironment.supabaseConnection.deleteAccount()
+            await viewModel.signOut(appEnvironment: appEnvironment)
+            isSignedOut = true
+        } catch {
+            // Handle error - could show an alert here
+            print("Error deleting account: \(error)")
+        }
     }
     
     var body: some View {
@@ -721,6 +733,35 @@ struct ProfileTabView: View {
                         .background(Color.orange)
                         .cornerRadius(12)
                 }
+                
+                // Sign Out Button
+                Button(action: {
+                    Task {
+                        await viewModel.signOut(appEnvironment: appEnvironment)
+                        isSignedOut = true
+                    }
+                }) {
+                    Text("Sign Out")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Color.red.opacity(0.6))
+                        .cornerRadius(12)
+                }
+                
+                // Delete Account Button
+                Button(action: {
+                    showDeleteConfirmation = true
+                }) {
+                    Text("Delete Account")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(Color.red.opacity(0.9))
+                        .cornerRadius(12)
+                }
             }
             
             // Safety and Legal Section
@@ -760,21 +801,6 @@ struct ProfileTabView: View {
                 .background(Color.white.opacity(0.05))
                 .cornerRadius(12)
             }
-            
-            Button(action: {
-                Task {
-                    await viewModel.signOut(appEnvironment: appEnvironment)
-                    isSignedOut = true
-                }
-            }) {
-                Text("Sign Out")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Color.red.opacity(0.8))
-                    .cornerRadius(12)
-            }
         }
         .sheet(isPresented: $showTermsOfService) {
             TermsOfServiceView()
@@ -784,6 +810,16 @@ struct ProfileTabView: View {
         }
         .sheet(isPresented: $showSafetyDisclaimer) {
             SafetyDisclaimerView(isPresented: $showSafetyDisclaimer)
+        }
+        .alert("Delete Account", isPresented: $showDeleteConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete", role: .destructive) {
+                Task {
+                    await deleteAccount()
+                }
+            }
+        } message: {
+            Text("Are you sure you want to delete your account? This action cannot be undone. All your data, including profile, stats, and race history will be permanently deleted.")
         }
     }
     

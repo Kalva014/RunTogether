@@ -750,6 +750,9 @@ class BaseRunningScene: SKScene, ObservableObject {
         isRealtimeEnabled = true
         currentRaceId = raceId // Store race ID for later use
         
+        // First, load existing participants who are already in the race
+        await loadExistingParticipants(raceId: raceId, appEnvironment: appEnvironment)
+        
         // Subscribe to the race channel
         await appEnvironment.supabaseConnection.subscribeToRaceBroadcasts(raceId: raceId)
         
@@ -758,30 +761,54 @@ class BaseRunningScene: SKScene, ObservableObject {
             await processRealtimeMessages(appEnvironment: appEnvironment)
         }
     }
+    
+    /// Load existing participants who are already in the race
+    private func loadExistingParticipants(raceId: UUID, appEnvironment: AppEnvironment) async {
+        do {
+            let participants = try await appEnvironment.supabaseConnection.getRaceParticipants(raceId: raceId)
+            
+            for participant in participants {
+                // Fetch user profile for each participant
+                guard let profile = try? await appEnvironment.supabaseConnection.getProfileById(userId: participant.user_id) else {
+                    continue
+                }
+                
+                // Initialize opponent data with current distance from participant record
+                realtimeOpponents[participant.user_id] = RealtimeOpponentData(
+                    userId: participant.user_id,
+                    username: profile.username,
+                    distance: participant.distance_covered,
+                    paceMinutes: participant.average_pace ?? 0,
+                    speedMps: 0, // Will be updated when they broadcast
+                    lastUpdateTime: Date(),
+                    spriteUrl: profile.selected_sprite_url,
+                    country: profile.country
+                )
+            }
+        } catch {
+            // Silently handle error - race will continue with just broadcast updates
+        }
+    }
 
     /// Process incoming broadcast messages
     private func processRealtimeMessages(appEnvironment: AppEnvironment) async {
         guard let channel = appEnvironment.supabaseConnection.currentChannel else {
-            print("❌ No channel available for processing messages")
             return
         }
         
         let stream = channel.broadcastStream(event: "update")
-        print("✅ Started listening to broadcast stream")
         
         for await message in stream {
 //            print("📡 Received broadcast message: \(message)")
             
             // Extract payload from the message
             guard let payload = message["payload"]?.objectValue else {
-                print("⚠️ No payload in message")
                 continue
             }
             
             guard let userIdString = payload["user_id"]?.stringValue,
                   let userId = UUID(uuidString: userIdString),
                   userId != appEnvironment.supabaseConnection.currentUserId else {
-                print("⏭️ Skipping own message or invalid user_id")
                 continue // Skip our own messages
             }
             
@@ -799,35 +826,25 @@ class BaseRunningScene: SKScene, ObservableObject {
                 realtimeOpponents[userId]?.speedMps = speedMps
                 realtimeOpponents[userId]?.lastUpdateTime = Date()
             } else {
-                print("➕ New opponent detected: \(userId), fetching profile...")
                 // Fetch username and sprite for new opponent
                 Task { @MainActor in
-                    do {
-                        guard let profile = try await appEnvironment.supabaseConnection.getProfileById(userId: userId) else {
-                            print("⚠️ Could not fetch profile for \(userId)")
-                            return
-                        }
-                        
-                        print("✅ Profile fetched for \(userId): \(profile.username), sprite: \(profile.selected_sprite_url ?? "none"), country: \(profile.country ?? "none")")
-                        
-                        realtimeOpponents[userId] = RealtimeOpponentData(
-                            userId: userId,
-                            username: profile.username,
-                            distance: distance,
-                            paceMinutes: pace,
-                            speedMps: speedMps,
-                            lastUpdateTime: Date(),
-                            spriteUrl: profile.selected_sprite_url,
-                            country: profile.country
-                        )
-                    } catch {
-                        print("❌ Error fetching profile for \(userId): \(error)")
+                    guard let profile = try? await appEnvironment.supabaseConnection.getProfileById(userId: userId) else {
+                        return
                     }
+                    
+                    realtimeOpponents[userId] = RealtimeOpponentData(
+                        userId: userId,
+                        username: profile.username,
+                        distance: distance,
+                        paceMinutes: pace,
+                        speedMps: speedMps,
+                        lastUpdateTime: Date(),
+                        spriteUrl: profile.selected_sprite_url,
+                        country: profile.country
+                    )
                 }
             }
         }
-        
-        print("🛑 Broadcast stream ended")
     }
 
     /// Sync realtime opponent data to visible runners on screen
@@ -862,7 +879,6 @@ class BaseRunningScene: SKScene, ObservableObject {
             let baseY = -frame.height / 2.5 + (frame.height * 0.2)
             runnerNode.position = CGPoint(x: laneOffset, y: baseY)
             
-            print("🏃 Positioned runner \(opponent.username) at x: \(laneOffset), y: \(baseY)")
             addChild(runnerNode)
             otherRunners.append(runnerNode)
             otherRunnersNames.append(opponent.username)
@@ -1029,11 +1045,6 @@ class BaseRunningScene: SKScene, ObservableObject {
         realtimeOpponents = realtimeOpponents.filter { 
             !$0.value.isStale || $0.value.distance >= Double(raceDistance) 
         }
-        let afterCount = realtimeOpponents.count
-        
-        if beforeCount != afterCount {
-            print("🧹 Removed \(beforeCount - afterCount) stale opponents")
-        }
         
         // Sort by userId to maintain consistent ordering
         let activeOpponents = realtimeOpponents.sorted(by: { $0.key.uuidString < $1.key.uuidString }).map { $0.value }
@@ -1046,8 +1057,6 @@ class BaseRunningScene: SKScene, ObservableObject {
         while otherRunners.count < activeOpponents.count && otherRunners.count < 10 {
             let index = otherRunners.count
             let opponent = activeOpponents[index]
-            
-            print("➕ Creating visual runner for \(opponent.username) at index \(index) with sprite URL: \(opponent.spriteUrl ?? "nil")")
             
             let runnerNode = createRunner(
                 name: opponent.username,
@@ -1063,7 +1072,6 @@ class BaseRunningScene: SKScene, ObservableObject {
             let baseY = -frame.height / 2.5 + (frame.height * 0.2)
             runnerNode.position = CGPoint(x: laneOffset, y: baseY)
             
-            print("🏃 Positioned runner \(opponent.username) at x: \(laneOffset), y: \(baseY)")
             addChild(runnerNode)
             otherRunners.append(runnerNode)
             otherRunnersNames.append(opponent.username)

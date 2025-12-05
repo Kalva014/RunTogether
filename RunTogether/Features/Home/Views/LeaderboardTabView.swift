@@ -13,6 +13,7 @@ import SwiftUI
 struct LeaderboardTabView: View {
     @EnvironmentObject var appEnvironment: AppEnvironment
     @StateObject var viewModel = LeaderboardTabViewModel()
+    @State private var hasLoaded = false
     
     var filteredRankedLeaderboard: [RankedLeaderboardEntry] {
         return viewModel.rankedLeaderboardEntries
@@ -54,6 +55,8 @@ struct LeaderboardTabView: View {
             }
         }
         .task {
+            guard !hasLoaded else { return }
+            hasLoaded = true
             await viewModel.refresh(appEnvironment: appEnvironment)
         }
     }
@@ -64,11 +67,11 @@ struct LeaderboardTabView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: "trophy.fill")
-                    .font(.system(size: 40))
+                    .font(.system(size: ResponsiveLayout.titleFontSize * 0.8))
                     .foregroundColor(.orange)
                 
                 Text("Ranked")
-                    .font(.system(size: 48, weight: .bold))
+                    .font(.system(size: ResponsiveLayout.titleFontSize, weight: .bold))
                     .foregroundColor(.white)
             }
             
@@ -77,9 +80,9 @@ struct LeaderboardTabView: View {
                 .foregroundColor(.gray)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 20)
-        .padding(.top, 60)
-        .padding(.bottom, 20)
+        .responsiveHorizontalPadding()
+        .padding(.top, max(60, ResponsiveLayout.safeAreaTopPadding + 16))
+        .padding(.bottom, ResponsiveLayout.sectionSpacing)
     }
     
     private var rankedLeaderboardList: some View {
