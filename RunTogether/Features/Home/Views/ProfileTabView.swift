@@ -622,7 +622,7 @@ struct ProfileTabView: View {
                     .font(.title3)
                     .foregroundColor(.orange)
                 
-                Text("Running Sprite")
+                Text("Running Character")
                     .font(.headline)
                     .foregroundColor(.white)
                 
@@ -669,7 +669,7 @@ struct ProfileTabView: View {
                     }
                     
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Choose Your Sprite")
+                        Text("Choose Your Character")
                             .font(.subheadline)
                             .fontWeight(.semibold)
                             .foregroundColor(.white)
