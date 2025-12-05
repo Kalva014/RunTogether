@@ -84,7 +84,7 @@ struct SpriteSelectionView: View {
                 
                 Spacer()
                 
-                Text("Choose Your Sprite")
+                Text("Choose Your Character")
                     .font(.title2)
                     .fontWeight(.bold)
                     .foregroundColor(.white)
@@ -108,7 +108,7 @@ struct SpriteSelectionView: View {
             .padding(.top, 60)
             .padding(.bottom, 10)
             
-            Text("Select a sprite to represent you in races")
+            Text("Select a character to represent you in races")
                 .font(.subheadline)
                 .foregroundColor(.gray)
                 .padding(.horizontal, 20)
@@ -123,7 +123,7 @@ struct SpriteSelectionView: View {
                 .tint(.orange)
                 .scaleEffect(1.5)
             
-            Text("Loading sprites...")
+            Text("Loading characters...")
                 .font(.subheadline)
                 .foregroundColor(.gray)
         }
@@ -136,11 +136,11 @@ struct SpriteSelectionView: View {
                 .font(.system(size: 60))
                 .foregroundColor(.gray)
             
-            Text("No sprites available")
+            Text("No characters available")
                 .font(.headline)
                 .foregroundColor(.white)
             
-            Text("Check back later for new sprites!")
+            Text("Check back later for new character!")
                 .font(.subheadline)
                 .foregroundColor(.gray)
         }
@@ -178,7 +178,7 @@ struct SpriteSelectionView: View {
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = "Failed to save sprite: \(error.localizedDescription)"
+                    errorMessage = "Failed to save character: \(error.localizedDescription)"
                     showError = true
                     isSaving = false
                 }
