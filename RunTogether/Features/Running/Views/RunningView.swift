@@ -390,51 +390,76 @@ struct RunningView: View {
     
     // MARK: - Treadmill Sidebar
     private var treadmillSidebar: some View {
-        HStack {
+        VStack {
             Spacer()
             
-            VStack(spacing: 20) {
-                // Increase pace button (top)
-                RepeatButton(action: {
-                    viewModel.updateTreadmillPace(change: -0.25)
-                }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 55))
-                        .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.3), radius: 2)
-                }
-                .frame(width: 70, height: 70)
+            HStack {
+                Spacer()
                 
-                // Pace display
-                VStack(spacing: 6) {
-                    Text(String(format: "%.2f", viewModel.treadmillPace))
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(.white)
-                    Text("pace")
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                VStack(spacing: 16) {
+                    // Increase pace button (top)
+                    RepeatButton(action: {
+                        viewModel.updateTreadmillPace(change: -0.25)
+                    }) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 50))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.3), radius: 2)
+                    }
+                    .frame(width: 60, height: 60)
+                    
+                    // Pace and Treadmill Level display
+                    VStack(spacing: 2) {
+                        // Treadmill level equivalent (top)
+                        if let level = getTreadmillLevel(pace: viewModel.treadmillPace, useMiles: viewModel.useMiles) {
+                            VStack(spacing: 1) {
+                                Text(formatTreadmillLevel(level))
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(.orange)
+                                Text("treadmill level")
+                                    .font(.system(size: 8))
+                                    .foregroundColor(.gray)
+                            }
+                            
+                            Divider()
+                                .background(Color.white.opacity(0.3))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                        }
+                        
+                        // Pace (bottom)
+                        Text(String(format: "%.2f", viewModel.treadmillPace))
+                            .font(.title3)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        Text("pace")
+                            .font(.system(size: 9))
+                            .foregroundColor(.gray)
+                    }
+                    .frame(width: 70)
+                    .padding(.vertical, 6)
+                    .background(Color.black.opacity(0.8))
+                    .cornerRadius(12)
+                    
+                    // Decrease pace button (bottom)
+                    RepeatButton(action: {
+                        viewModel.updateTreadmillPace(change: 0.25)
+                    }) {
+                        Image(systemName: "minus.circle.fill")
+                            .font(.system(size: 50))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.3), radius: 2)
+                    }
+                    .frame(width: 60, height: 60)
                 }
-                .frame(width: 80, height: 60)
-                .background(Color.black.opacity(0.8))
-                .cornerRadius(16)
-                
-                // Decrease pace button (bottom)
-                RepeatButton(action: {
-                    viewModel.updateTreadmillPace(change: 0.25)
-                }) {
-                    Image(systemName: "minus.circle.fill")
-                        .font(.system(size: 55))
-                        .foregroundColor(.white)
-                        .shadow(color: .black.opacity(0.3), radius: 2)
-                }
-                .frame(width: 70, height: 70)
+                .padding(.vertical, 16)
+                .padding(.horizontal, 12)
+                .background(Color.black.opacity(0.6))
+                .cornerRadius(20)
+                .padding(.trailing, 16)
             }
-            .padding(.vertical, 20)
-            .padding(.horizontal, 16)
-            .background(Color.black.opacity(0.6))
-            .cornerRadius(25)
-            .padding(.trailing, 20)
+            .padding(.bottom, 100)
         }
     }
     
@@ -649,6 +674,31 @@ struct RunningView: View {
             .cornerRadius(20)
             .padding(.horizontal, 40)
         }
+    }
+    
+    // MARK: - Helper Functions
+    
+    /// Calculates the equivalent treadmill speed level based on pace (min/mile or min/km)
+    /// Returns the treadmill speed in MPH
+    private func getTreadmillLevel(pace: Double, useMiles: Bool) -> Double? {
+        // If pace is 0 or invalid, return nil
+        guard pace > 0 else { return nil }
+        
+        // Convert pace to speed
+        // Pace is in minutes per unit (mile or km)
+        // Speed = 60 / pace (in units per hour)
+        let speed = 60.0 / pace
+        
+        // If using km, convert to mph for treadmill display
+        let speedInMph = useMiles ? speed : speed * 0.621371
+        
+        return speedInMph
+    }
+    
+    /// Formats the treadmill level for display
+    private func formatTreadmillLevel(_ level: Double?) -> String {
+        guard let level = level else { return "--" }
+        return String(format: "%.1f", level)
     }
     
     // MARK: - Chat Overlay
