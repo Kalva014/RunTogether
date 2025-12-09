@@ -33,4 +33,16 @@ class LogInViewModel: ObservableObject {
             return false
         }
     }
+    
+    func resetPassword(email: String, appEnvironment: AppEnvironment) async -> Bool {
+        do {
+            try await appEnvironment.supabaseConnection.resetPasswordForEmail(email: email)
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            print("Error sending password reset email: \(error.localizedDescription)")
+            return false
+        }
+    }
 }

@@ -12,6 +12,7 @@ struct ContentView: View {
     @State private var showOnboarding = false
     @State private var onboardingCompleted = false
     @State private var hasCheckedOnboarding = false
+    @State private var showResetPassword = false
     
     var body: some View {
         Group {
@@ -43,6 +44,37 @@ struct ContentView: View {
             hasCheckedOnboarding = false
         }) {
             OnboardingView(isPresented: $showOnboarding)
+        }
+        .sheet(isPresented: $showResetPassword) {
+            ResetPasswordView()
+                .environmentObject(appEnvironment)
+        }
+        .onOpenURL { url in
+            handleDeepLink(url)
+        }
+    }
+    
+    private func handleDeepLink(_ url: URL) {
+        print("📱 Deep link received: \(url.absoluteString)")
+        
+        // Handle password reset deep link
+        if url.scheme == "runtogether" && url.host == "reset-password" {
+            Task {
+                do {
+                    // Use Supabase's session method to handle the deep link
+                    // This exchanges the code for a session
+                    try await appEnvironment.supabaseConnection.client.auth.session(from: url)
+                    
+                    print("✅ Session established from deep link")
+                    
+                    // Show the reset password view
+                    await MainActor.run {
+                        showResetPassword = true
+                    }
+                } catch {
+                    print("❌ Error handling deep link: \(error)")
+                }
+            }
         }
     }
 }

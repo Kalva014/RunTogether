@@ -15,6 +15,10 @@ struct LogInView: View {
     @State private var email: String = ""
     @State private var password: String = ""
     @State var isLoggedIn: Bool = false
+    @State private var showForgotPasswordAlert: Bool = false
+    @State private var resetEmail: String = ""
+    @State private var showResetSuccessAlert: Bool = false
+    @State private var showResetErrorAlert: Bool = false
 
     init() {
         _viewModel = StateObject(wrappedValue: LogInViewModel())
@@ -105,6 +109,17 @@ struct LogInView: View {
                 .disabled(email.isEmpty || password.isEmpty)
                 .opacity(email.isEmpty || password.isEmpty ? 0.5 : 1.0)
                 
+                Button(action: {
+                    appEnvironment.soundManager.playTap()
+                    resetEmail = email
+                    showForgotPasswordAlert = true
+                }) {
+                    Text("Forgot Password?")
+                        .font(.subheadline)
+                        .foregroundColor(.orange)
+                }
+                .padding(.top, 12)
+                
                 Spacer()
                 Spacer()
             }
@@ -112,6 +127,46 @@ struct LogInView: View {
             .navigationDestination(isPresented: $isLoggedIn) {
                 HomeView()
                     .environmentObject(appEnvironment)
+            }
+            .alert("Reset Password", isPresented: $showForgotPasswordAlert) {
+                TextField("Email", text: $resetEmail)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.emailAddress)
+                Button("Cancel", role: .cancel) {
+                    appEnvironment.soundManager.playTap()
+                }
+                Button("Send Reset Link") {
+                    Task {
+                        appEnvironment.soundManager.playTap()
+                        let success = await viewModel.resetPassword(
+                            email: resetEmail,
+                            appEnvironment: appEnvironment
+                        )
+                        if success {
+                            appEnvironment.soundManager.playSuccess()
+                            showResetSuccessAlert = true
+                        } else {
+                            appEnvironment.soundManager.playError()
+                            showResetErrorAlert = true
+                        }
+                    }
+                }
+            } message: {
+                Text("Enter your email address to receive a password reset link.")
+            }
+            .alert("Success", isPresented: $showResetSuccessAlert) {
+                Button("OK") {
+                    appEnvironment.soundManager.playTap()
+                }
+            } message: {
+                Text("Password reset link has been sent to \(resetEmail). Please check your email.")
+            }
+            .alert("Error", isPresented: $showResetErrorAlert) {
+                Button("OK") {
+                    appEnvironment.soundManager.playTap()
+                }
+            } message: {
+                Text(viewModel.errorMessage ?? "Failed to send password reset email. Please try again.")
             }
         }
     }

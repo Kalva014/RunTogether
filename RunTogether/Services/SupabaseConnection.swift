@@ -266,6 +266,21 @@ class SupabaseConnection: ObservableObject {
         }
     }
     
+    func resetPasswordForEmail(email: String) async throws {
+        do {
+            // Use deep link to redirect back to the app
+            try await self.client.auth.resetPasswordForEmail(
+                email,
+                redirectTo: URL(string: "runtogether://reset-password")
+            )
+            print("Password reset email sent to: \(email)")
+        }
+        catch {
+            print("Could not send password reset email: \(error)")
+            throw error
+        }
+    }
+    
     /// Delete the current user's account and all associated data
     /// Note: Requires the delete_own_account() database function to be set up in Supabase
     /// See SUPABASE_DELETE_USER_SETUP.md for setup instructions

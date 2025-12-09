@@ -27,5 +27,18 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.runtogether.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>runtogether</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
