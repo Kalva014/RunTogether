@@ -232,13 +232,21 @@ class LeaderboardTabViewModel: ObservableObject {
         profiles = [:]
         hasMorePages = true
         
-        async let leaderboardTask: () = fetchLeaderboard(appEnvironment: appEnvironment)
-        async let statsTask: () = fetchMyStats(appEnvironment: appEnvironment)
-        async let countTask: () = fetchTotalCount(appEnvironment: appEnvironment)
-        
-        await leaderboardTask
-        await statsTask
-        await countTask
+        // Use TaskGroup to prevent automatic cancellation
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { @MainActor in
+                await self.fetchLeaderboard(appEnvironment: appEnvironment)
+            }
+            group.addTask { @MainActor in
+                await self.fetchMyStats(appEnvironment: appEnvironment)
+            }
+            group.addTask { @MainActor in
+                await self.fetchTotalCount(appEnvironment: appEnvironment)
+            }
+            
+            // Wait for all tasks to complete
+            await group.waitForAll()
+        }
     }
     
     /// Switch between ranked and casual leaderboards

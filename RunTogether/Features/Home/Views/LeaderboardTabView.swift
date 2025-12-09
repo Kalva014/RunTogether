@@ -43,7 +43,12 @@ struct LeaderboardTabView: View {
                         .padding(.bottom, 100)
                     }
                     .refreshable {
-                        await viewModel.refresh(appEnvironment: appEnvironment)
+                        // Start refresh in detached task to prevent cancellation
+                        Task.detached { @MainActor in
+                            await viewModel.refresh(appEnvironment: appEnvironment)
+                        }
+                        // Small delay to show refresh indicator
+                        try? await Task.sleep(nanoseconds: 500_000_000)
                     }
                 }
             }
@@ -54,10 +59,12 @@ struct LeaderboardTabView: View {
                 }
             }
         }
-        .task {
+        .onAppear {
             guard !hasLoaded else { return }
             hasLoaded = true
-            await viewModel.refresh(appEnvironment: appEnvironment)
+            Task {
+                await viewModel.refresh(appEnvironment: appEnvironment)
+            }
         }
     }
     
