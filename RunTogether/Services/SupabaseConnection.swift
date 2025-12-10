@@ -48,6 +48,10 @@ class SupabaseConnection: ObservableObject {
             let user = session.user
             self.currentUserId = user.id
             self.isAuthenticated = true
+            
+            // Link RevenueCat user on session restore
+            try? await SubscriptionManager.shared.identifyUser(supabaseUserId: user.id)
+            
             print("User session restored: \(user.email ?? "unknown")")
         } catch {
             // No valid session found.
@@ -233,6 +237,10 @@ class SupabaseConnection: ObservableObject {
             )
             self.currentUserId = response.user.id
             self.isAuthenticated = true
+            
+            // Link RevenueCat user
+            try? await SubscriptionManager.shared.identifyUser(supabaseUserId: response.user.id)
+            
             return response.user
         }
         catch {
@@ -246,6 +254,10 @@ class SupabaseConnection: ObservableObject {
             let response = try await self.client.auth.signIn(email: email, password: password)
             self.currentUserId = response.user.id
             self.isAuthenticated = true
+            
+            // Link RevenueCat user
+            try? await SubscriptionManager.shared.identifyUser(supabaseUserId: response.user.id)
+            
             return response.user
         }
         catch {
@@ -256,6 +268,9 @@ class SupabaseConnection: ObservableObject {
     
     func signOut() async throws {
         do {
+            // Log out from RevenueCat
+            try? await SubscriptionManager.shared.logoutUser()
+            
             try await self.client.auth.signOut()
             self.currentUserId = nil
             self.isAuthenticated = false

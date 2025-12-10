@@ -41,6 +41,7 @@ struct HomeView: View {
             
             customTabBar
         }
+        .monitorSubscription() // Monitor subscription and show paywall if expired
     }
     
     private var customTabBar: some View {

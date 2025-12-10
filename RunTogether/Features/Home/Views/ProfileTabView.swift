@@ -764,6 +764,23 @@ struct ProfileTabView: View {
                 }
             }
             
+            // Subscription Management Section
+            NavigationLink(destination: ManageSubscriptionView()) {
+                HStack {
+                    Image(systemName: "crown.fill")
+                        .foregroundColor(.orange)
+                    Text("Manage Subscription")
+                        .foregroundColor(.white)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundColor(.gray)
+                }
+                .font(.headline)
+                .padding()
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(12)
+            }
+            
             // Safety and Legal Section
             VStack(alignment: .leading, spacing: 12) {
                 Text("Safety & Legal")

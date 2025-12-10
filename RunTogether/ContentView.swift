@@ -9,29 +9,39 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject var appEnvironment: AppEnvironment
+    @StateObject private var subscriptionManager = SubscriptionManager.shared
     @State private var showOnboarding = false
     @State private var onboardingCompleted = false
     @State private var hasCheckedOnboarding = false
     @State private var showResetPassword = false
+    @State private var hasGrantedAccess = false
     
     var body: some View {
         Group {
             if let user = appEnvironment.appUser {
                 // User is logged in
-                if OnboardingManager.shared.hasSeenOnboarding(for: user.id) || onboardingCompleted {
-                    // Onboarding complete → show HomeView
-                    HomeView()
-                } else {
-                    // First time user → show onboarding first
-                    Color.black.ignoresSafeArea()
-                        .onAppear {
-                            guard !hasCheckedOnboarding else { return }
-                            hasCheckedOnboarding = true
-                            // Small delay for smoother transition
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                showOnboarding = true
+                if hasGrantedAccess {
+                    // Subscription verified → show app content
+                    if OnboardingManager.shared.hasSeenOnboarding(for: user.id) || onboardingCompleted {
+                        // Onboarding complete → show HomeView
+                        HomeView()
+                    } else {
+                        // First time user → show onboarding first
+                        Color.black.ignoresSafeArea()
+                            .onAppear {
+                                guard !hasCheckedOnboarding else { return }
+                                hasCheckedOnboarding = true
+                                // Small delay for smoother transition
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    showOnboarding = true
+                                }
                             }
-                        }
+                    }
+                } else {
+                    // Check subscription before granting access
+                    SubscriptionGateView {
+                        hasGrantedAccess = true
+                    }
                 }
             } else {
                 // User NOT logged in → show welcome screen
@@ -39,6 +49,12 @@ struct ContentView: View {
             }
         }
         .id(appEnvironment.appUser?.id ?? "logged-out")
+        .onChange(of: appEnvironment.appUser) { oldValue, newValue in
+            // Reset access when user changes
+            if oldValue?.id != newValue?.id {
+                hasGrantedAccess = false
+            }
+        }
         .fullScreenCover(isPresented: $showOnboarding, onDismiss: {
             onboardingCompleted = true
             hasCheckedOnboarding = false
