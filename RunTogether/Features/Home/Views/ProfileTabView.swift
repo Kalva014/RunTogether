@@ -12,15 +12,16 @@ import SwiftUI
 import PhotosUI
 
 struct ProfileTabView: View {
+    @Environment(\.openURL) private var openURL
     @EnvironmentObject var appEnvironment: AppEnvironment
     @StateObject var viewModel: ProfileTabViewModel
     @State private var isEditing = false
     @State private var isSignedOut = false
     @State private var showOnboarding = false  // NEW: Add this state
-    @State private var showTermsOfService = false
-    @State private var showPrivacyPolicy = false
     @State private var showSafetyDisclaimer = false
     @State private var showDeleteConfirmation = false
+    private let privacyPolicyURL = URL(string: "https://kalva014.github.io/RunTogetherLandingPage/privacypolicy/")!
+    private let termsOfServiceURL = URL(string: "https://kalva014.github.io/RunTogetherLandingPage/termsofservice/")!
     
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var selectedImage: UIImage? = nil
@@ -802,7 +803,7 @@ struct ProfileTabView: View {
                     settingsRow(
                         icon: "doc.text.fill",
                         title: "Terms of Service",
-                        action: { showTermsOfService = true }
+                        action: { openURL(termsOfServiceURL) }
                     )
                     
                     Divider()
@@ -812,18 +813,12 @@ struct ProfileTabView: View {
                     settingsRow(
                         icon: "hand.raised.fill",
                         title: "Privacy Policy",
-                        action: { showPrivacyPolicy = true }
+                        action: { openURL(privacyPolicyURL) }
                     )
                 }
                 .background(Color.white.opacity(0.05))
                 .cornerRadius(12)
             }
-        }
-        .sheet(isPresented: $showTermsOfService) {
-            TermsOfServiceView()
-        }
-        .sheet(isPresented: $showPrivacyPolicy) {
-            PrivacyPolicyView()
         }
         .sheet(isPresented: $showSafetyDisclaimer) {
             SafetyDisclaimerView(isPresented: $showSafetyDisclaimer)

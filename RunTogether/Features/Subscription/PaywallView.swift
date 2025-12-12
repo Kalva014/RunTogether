@@ -10,13 +10,14 @@ import RevenueCat
 
 struct PaywallView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.openURL) private var openURL
     @StateObject private var subscriptionManager = SubscriptionManager.shared
     @State private var selectedPackage: Package?
     @State private var showingError = false
     @State private var showingSuccess = false
     @State private var isTrialEligible = false
-    @State private var showingPrivacyPolicy = false
-    @State private var showingTermsOfService = false
+    private let privacyPolicyURL = URL(string: "https://kalva014.github.io/RunTogetherLandingPage/privacypolicy/")!
+    private let termsOfServiceURL = URL(string: "https://kalva014.github.io/RunTogetherLandingPage/termsofservice/")!
     
     var onSubscribe: (() -> Void)?
     
@@ -79,12 +80,6 @@ struct PaywallView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(subscriptionManager.errorMessage ?? "An error occurred")
-        }
-        .sheet(isPresented: $showingPrivacyPolicy) {
-            PrivacyPolicyView()
-        }
-        .sheet(isPresented: $showingTermsOfService) {
-            TermsOfServiceView()
         }
         .task {
             await loadOfferings()
@@ -263,11 +258,11 @@ struct PaywallView: View {
             
             HStack(spacing: 20) {
                 Button("Terms of Service") {
-                    showingTermsOfService = true
+                    openURL(termsOfServiceURL)
                 }
                 Text("•")
                 Button("Privacy Policy") {
-                    showingPrivacyPolicy = true
+                    openURL(privacyPolicyURL)
                 }
             }
             .font(.caption)
