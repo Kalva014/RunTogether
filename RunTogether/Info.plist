@@ -8,6 +8,8 @@
 	<string>Require access to your photos to upload a custom profile image for your account.</string>
 	<key>NSHealthShareUsageDescription</key>
 	<string>Require user&apos;s heart rate to display live health statistics during run.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>RunTogether needs to save your workout data to HealthKit so you can track your running progress and achievements.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Require user&apos;s location for tracking user&apos;s running pace and distance.</string>
 	<key>Supabase Key</key>
@@ -20,6 +22,10 @@
 		<string>location</string>
 		<string>processing</string>
 		<string>fetch</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.runtogether.app.refresh</string>
 	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
